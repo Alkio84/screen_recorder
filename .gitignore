@@ -348,3 +348,8 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+#ffmpeg include, lib and bin directories
+lib/
+include/
+bin/
