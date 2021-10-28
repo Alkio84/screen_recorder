@@ -353,3 +353,6 @@ MigrationBackup/
 lib/
 include/
 bin/
+
+*.vcxproj
+*.vcxproj.filters

@@ -1,4 +1,1 @@
-﻿  Origine.cpp
-C:\Users\ferre\source\repos\ScreenRecorder\Origine.cpp(1,10): warning C4067: token imprevisti dopo una direttiva per il preprocessore. Previsto un carattere di nuova riga
-  LINK : C:\Users\ferre\source\repos\ScreenRecorder\\bin\ScreenRecorder.exe non trovato o non compilato dall'ultimo collegamento incrementale; verrà eseguito il collegamento completo
-  ScreenRecorder.vcxproj -> C:\Users\ferre\source\repos\ScreenRecorder\bin\ScreenRecorder.exe
+﻿
