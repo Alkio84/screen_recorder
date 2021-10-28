@@ -56,14 +56,14 @@ extern "C"
 class ScreenRecorder
 {
 private:
-    AVInputFormat *pAVInputFormat;
-    AVOutputFormat *output_format;
+    AVInputFormat *inputFormat;
+    AVOutputFormat *outputFormat;
 
-    AVCodecContext *pAVCodecContext;
+    AVCodecContext *codecContext;
 
-    AVFormatContext *pAVFormatContext;
+    AVFormatContext *formatContext;
 
-    AVFrame *pAVFrame;
+    AVFrame *frame;
 
     AVCodec *decoder;
     AVCodec *encoder;

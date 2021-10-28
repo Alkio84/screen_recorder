@@ -32,12 +32,12 @@ ScreenRecorder::ScreenRecorder() {
 /* uninitialize the resources */
 ScreenRecorder::~ScreenRecorder()
 {
-    avformat_close_input(&pAVFormatContext);
-    if( !pAVFormatContext ) cout<<"\nfile closed sucessfully";
+    avformat_close_input(&formatContext);
+    if( !formatContext ) cout<<"\nfile closed sucessfully";
     else cout<<"\nunable to close the file";
     
-    avformat_free_context(pAVFormatContext);
-    if( !pAVFormatContext ) cout<<"\navformat free successfully";
+    avformat_free_context(formatContext);
+    if( !formatContext ) cout<<"\navformat free successfully";
     else cout<<"\nunable to free avformat context";
 }
 
@@ -45,20 +45,19 @@ ScreenRecorder::~ScreenRecorder()
 int ScreenRecorder::CaptureVideoFrames() {
     value = 0;
     
-    inputPacket = (AVPacket *)av_malloc(sizeof(AVPacket));
-    av_init_packet(inputPacket);
+    inputPacket = av_packet_alloc();
     
-    pAVFrame = av_frame_alloc();
-    if( !pAVFrame )
+    frame = av_frame_alloc();
+    if( !frame )
     {
         cout<<"\nunable to release the avframe resources";
         return 1;
     }
     
     SwsContext* swsCtx_ ;
-    swsCtx_ = sws_getContext(pAVCodecContext->width,
-                             pAVCodecContext->height,
-                             pAVCodecContext->pix_fmt,
+    swsCtx_ = sws_getContext(codecContext->width,
+                             codecContext->height,
+                             codecContext->pix_fmt,
                              outAVCodecContext->width,
                              outAVCodecContext->height,
                              outAVCodecContext->pix_fmt,
@@ -80,16 +79,16 @@ int ScreenRecorder::CaptureVideoFrames() {
     AVPacket *out_packet = av_packet_alloc();
     while(true) {
         int ret;
-        if((ret = av_read_frame( pAVFormatContext , inputPacket )) < 0) break;
-        if( ii++ > no_frames ) {
+        if((ret = av_read_frame( formatContext , inputPacket )) < 0) break;
+        if( ii > no_frames ) {
             av_packet_unref(out_packet);
             break;
         }
-
+        
         //cout << "Row: " << ii << endl;
         
         if(inputPacket->stream_index == VideoStreamIndx) {
-            ret = avcodec_send_packet(pAVCodecContext, inputPacket);
+            ret = avcodec_send_packet(codecContext, inputPacket);
             if(ret < 0) {
                 if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
                 else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
@@ -98,7 +97,7 @@ int ScreenRecorder::CaptureVideoFrames() {
             }
             
             AVFrame *in_frame = av_frame_alloc();
-            ret = avcodec_receive_frame(pAVCodecContext, in_frame);
+            ret = avcodec_receive_frame(codecContext, in_frame);
             if(ret < 0) {
                 if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
                 else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
@@ -111,7 +110,7 @@ int ScreenRecorder::CaptureVideoFrames() {
                 return -1;;
             }
             
-            sws_scale(swsCtx_, in_frame->data, in_frame->linesize, 0, pAVCodecContext->height, out_frame->data,out_frame->linesize);
+            sws_scale(swsCtx_, in_frame->data, in_frame->linesize, 0, codecContext->height, out_frame->data,out_frame->linesize);
             
             ret = avcodec_send_frame(outAVCodecContext, out_frame);
             if(ret < 0) {
@@ -122,16 +121,16 @@ int ScreenRecorder::CaptureVideoFrames() {
             }
             
             while (true) {
-                av_init_packet(out_packet);
+                out_packet = av_packet_alloc();
                 out_packet->data = nullptr;
                 out_packet->size = 0;
                 
                 ret = avcodec_receive_packet(outAVCodecContext, out_packet);
                 
-                out_packet->pts = av_rescale_q(out_packet->pts, video_st->codec->time_base, video_st->time_base);
-
-                out_packet->dts = av_rescale_q(out_packet->dts, video_st->codec->time_base, video_st->time_base);
-
+                out_packet->pts = av_rescale_q(out_packet->pts, outAVCodecContext->time_base, video_st->time_base);
+                
+                out_packet->dts = av_rescale_q(out_packet->dts, outAVCodecContext->time_base, video_st->time_base);
+                
                 
                 if(ret >= 0) {
                     // invece di av_write_frame
@@ -140,6 +139,7 @@ int ScreenRecorder::CaptureVideoFrames() {
                         cout << "Error in writing packet";
                         return -3;
                     }
+                    ii++;
                     av_packet_unref(out_packet);
                     break;
                 } else if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
@@ -170,11 +170,11 @@ int ScreenRecorder::CaptureVideoFrames() {
 /* establishing the connection between camera or screen through its respective folder */
 int ScreenRecorder::openCamera() {
     options = NULL;
-    pAVFormatContext = NULL;
+    formatContext = NULL;
     
     //av_register_all();
     avformat_network_init();
-    pAVFormatContext = avformat_alloc_context();
+    formatContext = avformat_alloc_context();
     
     //Register Device
     avdevice_register_all();
@@ -204,14 +204,14 @@ int ScreenRecorder::openCamera() {
     }
 #else
     show_avfoundation_device();
-    pAVInputFormat=av_find_input_format("avfoundation");
-    if(avformat_open_input(&pAVFormatContext,"1",pAVInputFormat,NULL)!=0){
+    inputFormat=av_find_input_format("avfoundation");
+    if(avformat_open_input(&formatContext,"1",inputFormat,NULL)!=0){
         printf("Couldn't open input stream.\n");
         return -1;
     }
 #endif
-    
-    if(av_dict_set( &options,"framerate","30",0 ) < 0) {
+
+    if(av_dict_set( &options,"enc_time_base","1:30",0 ) < 0) {
         cout<<"\nerror in setting dictionary value";
         return 1;
     }
@@ -221,39 +221,50 @@ int ScreenRecorder::openCamera() {
         return 1;
     }
     
-    AVDictionary *d = NULL;
-    av_dict_set(&d, "probesize", "10M", 0); // add an entry
-    if(avformat_find_stream_info(pAVFormatContext, &d) < 0) {
+    //av_dict_set(&options, "probesize", "10M", 0); // add an entry
+    if(avformat_find_stream_info(formatContext, &options) < 0) {
         cout<<"\nunable to find the stream information";
         return 1;
     }
     
+    decoder = nullptr;
     
-    VideoStreamIndx = -1;
+    VideoStreamIndx = av_find_best_stream(formatContext, AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
     
     /* find the first video stream index . Also there is an API available to do the below operations */
-    for(int i = 0; i < pAVFormatContext->nb_streams; i++ ) {
-        if( pAVFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO ) {
-            VideoStreamIndx = i;
-            break;
-        }
-    }
+    /*
+     for(int i = 0; i < formatContext->nb_streams; i++ ) {
+     if( formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO ) {
+     VideoStreamIndx = i;
+     break;
+     }
+     }
+     */
     
     if( VideoStreamIndx == -1) {
         cout<<"\nunable to find the video stream index. (-1)";
         return 1;
     }
     
+    decoder = avcodec_find_decoder(formatContext->streams[VideoStreamIndx]->codecpar->codec_id);
+    
+    codecContext = avcodec_alloc_context3(decoder);
+    
+    avcodec_parameters_to_context(codecContext, formatContext->streams[VideoStreamIndx]->codecpar);
+    
     // assign pAVFormatContext to VideoStreamIndx
-    pAVCodecContext = pAVFormatContext->streams[VideoStreamIndx]->codec;
+    //codecContext = formatContext->streams[VideoStreamIndx]->codec;
     
-    decoder = avcodec_find_decoder(pAVCodecContext->codec_id);
-    if( decoder == NULL ) {
-        cout<<"\nunable to find the decoder";
-        return 1;
-    }
+    /*
+     decoder = avcodec_find_decoder(codecContext->codec_id);
+     if( decoder == NULL ) {
+     cout<<"\nunable to find the decoder";
+     return 1;
+     }
+     */
     
-    value = avcodec_open2(pAVCodecContext , decoder , NULL);
+    //    value = avcodec_open2(codecContext, decoder, NULL);
+    value = avcodec_open2(codecContext, decoder, NULL);
     if( value < 0 ) {
         cout<<"\nunable to open the av codec";
         return 1;
@@ -281,19 +292,19 @@ int ScreenRecorder::init_outputfile() {
     }
     
     outAVCodecContext = avcodec_alloc_context3(encoder);
-    if( !outAVCodecContext )
-    {
+    if( !outAVCodecContext ) {
         cout<<"\nerror in allocating the codec contexts";
         return 1;
     }
     
+    //avcodec_parameters_to_context(outAVCodecContext, video_st->codecpar);
     
     /* set property of the video file */
     outAVCodecContext = video_st->codec;
     outAVCodecContext->codec_id = AV_CODEC_ID_MPEG4;// AV_CODEC_ID_MPEG4; // AV_CODEC_ID_H264 // AV_CODEC_ID_MPEG1VIDEO
     outAVCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
     outAVCodecContext->pix_fmt  = AV_PIX_FMT_YUV420P;
-    outAVCodecContext->bit_rate = 400000; // 2500000
+    outAVCodecContext->bit_rate = 4194304; // 2500000
     outAVCodecContext->width = 2560;
     outAVCodecContext->height = 1600;
     outAVCodecContext->gop_size = 3;
@@ -349,4 +360,3 @@ int ScreenRecorder::init_outputfile() {
     
     return 0;
 }
-

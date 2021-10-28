@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <iostream>
+
 #define __STDC_CONSTANT_MACROS
 
 #ifdef _WIN32
