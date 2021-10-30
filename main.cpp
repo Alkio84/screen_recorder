@@ -48,7 +48,9 @@ using namespace std;
      ScreenRecorder screen_record;
  
      if(screen_record.openCamera() != 0) return -1;
+     std::cout<<"opened camera"<<std::endl;
      if(screen_record.init_outputfile() != 0) return -1;
+    std::cout<<"input file created"<<std::endl;
      if(screen_record.CaptureVideoFrames() != 0) return -1;
  
      cout<<"\nprogram executed successfully\n";

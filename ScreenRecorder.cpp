@@ -181,15 +181,15 @@ int ScreenRecorder::openCamera() {
     //Windows
 #ifdef _WIN32
 #if USE_DSHOW
-    pAVInputFormat=av_find_input_format("dshow");
-    if(avformat_open_input(&pAVFormatContext,"video=screen-capture-recorder",ifmt,NULL)!=0){
+    inputFormat=av_find_input_format("dshow");
+    if(avformat_open_input(&formatContext,"video=screen-capture-recorder",inputFormat,NULL)!=0){
         printf("Couldn't open input stream.\n");
         return -1;
     }
 #else
     AVDictionary* options = NULL;
-    pAVInputFormat=av_find_input_format("gdigrab");
-    if(avformat_open_input(&pAVFormatContext,"desktop",ifmt,&options)!=0){
+    inputFormat = av_find_input_format("gdigrab");
+    if(avformat_open_input(&formatContext,"desktop",inputFormat,&options)!=0){
         printf("Couldn't open input stream.\n");
         return -1;
     }
@@ -197,8 +197,8 @@ int ScreenRecorder::openCamera() {
 #endif
 #elif defined linux
     AVDictionary* options = NULL;
-    pAVInputFormat=av_find_input_format("x11grab");
-    if(avformat_open_input(&pAVFormatContext,":0.0+10,20",ifmt,&options)!=0){
+    inputFormat=av_find_input_format("x11grab");
+    if(avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options)!=0){
         printf("Couldn't open input stream.\n");
         return -1;
     }
@@ -277,7 +277,7 @@ int ScreenRecorder::openCamera() {
 int ScreenRecorder::init_outputfile() {
     outputFormatContext = NULL;
     int value = 0;
-    output_file = "/Users/checco/Downloads/output.mp4";
+    output_file = "../Recordings/output.mp4";
     
     avformat_alloc_output_context2(&outputFormatContext, NULL, NULL, output_file);
     if (!outputFormatContext) {
@@ -304,9 +304,9 @@ int ScreenRecorder::init_outputfile() {
     outAVCodecContext->codec_id = AV_CODEC_ID_MPEG4;// AV_CODEC_ID_MPEG4; // AV_CODEC_ID_H264 // AV_CODEC_ID_MPEG1VIDEO
     outAVCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
     outAVCodecContext->pix_fmt  = AV_PIX_FMT_YUV420P;
-    outAVCodecContext->bit_rate = 4194304; // 2500000
-    outAVCodecContext->width = 2560;
-    outAVCodecContext->height = 1600;
+    outAVCodecContext->bit_rate = 8000000; // 2500000
+    outAVCodecContext->width = 3840;
+    outAVCodecContext->height = 1080;
     outAVCodecContext->gop_size = 3;
     outAVCodecContext->max_b_frames = 1;
     outAVCodecContext->time_base = {1, 30};

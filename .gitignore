@@ -355,5 +355,13 @@ lib/
 include/
 bin/
 
+#visual studio 2019 project files
 *.vcxproj
 *.vcxproj.filters
+
+#clion
+cmake-build-debug/
+CMakeLists.txt
+
+#rcordings folder
+Recordings/
