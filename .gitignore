@@ -361,7 +361,6 @@ bin/
 
 #clion
 cmake-build-debug/
-CMakeLists.txt
 
 #rcordings folder
 Recordings/

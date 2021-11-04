@@ -30,141 +30,14 @@ ScreenRecorder::ScreenRecorder() {
 }
 
 /* uninitialize the resources */
-ScreenRecorder::~ScreenRecorder()
-{
+ScreenRecorder::~ScreenRecorder() {
     avformat_close_input(&formatContext);
-    if( !formatContext ) cout<<"\nfile closed sucessfully";
+    if( !formatContext ) cout<<"\nfile closed successfully";
     else cout<<"\nunable to close the file";
     
     avformat_free_context(formatContext);
     if( !formatContext ) cout<<"\navformat free successfully";
     else cout<<"\nunable to free avformat context";
-}
-
-/* function to capture and store data in frames by allocating required memory and auto deallocating the memory.   */
-int ScreenRecorder::CaptureVideoFrames() {
-    value = 0;
-    
-    inputPacket = av_packet_alloc();
-    
-    frame = av_frame_alloc();
-    if( !frame )
-    {
-        cout<<"\nunable to release the avframe resources";
-        return 1;
-    }
-    
-    SwsContext* swsCtx_ ;
-    swsCtx_ = sws_getContext(codecContext->width,
-                             codecContext->height,
-                             codecContext->pix_fmt,
-                             outAVCodecContext->width,
-                             outAVCodecContext->height,
-                             outAVCodecContext->pix_fmt,
-                             SWS_BICUBIC, NULL, NULL, NULL);
-    
-    
-    int ii = 0;
-    int no_frames = 100;
-    cout<<"\nenter No. of frames to capture : ";
-    cin>>no_frames;
-    
-    AVFrame *out_frame = nullptr;
-    out_frame = av_frame_alloc();
-    out_frame->format = outAVCodecContext->pix_fmt;
-    out_frame->width  = outAVCodecContext->width;
-    out_frame->height = outAVCodecContext->height;
-    av_frame_get_buffer(out_frame, 0);
-    
-    AVPacket *out_packet = av_packet_alloc();
-    while(true) {
-        int ret;
-        if((ret = av_read_frame( formatContext , inputPacket )) < 0) break;
-        if( ii > no_frames ) {
-            av_packet_unref(out_packet);
-            break;
-        }
-        
-        //cout << "Row: " << ii << endl;
-        
-        if(inputPacket->stream_index == VideoStreamIndx) {
-            ret = avcodec_send_packet(codecContext, inputPacket);
-            if(ret < 0) {
-                if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
-                else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
-                
-                return -1;
-            }
-            
-            AVFrame *in_frame = av_frame_alloc();
-            ret = avcodec_receive_frame(codecContext, in_frame);
-            if(ret < 0) {
-                if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
-                else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
-                
-                return -1;
-            }
-            
-            if (ret < 0) {
-                fprintf(stderr, "Could not allocate raw picture buffer\n");
-                return -1;;
-            }
-            
-            sws_scale(swsCtx_, in_frame->data, in_frame->linesize, 0, codecContext->height, out_frame->data,out_frame->linesize);
-            
-            ret = avcodec_send_frame(outAVCodecContext, out_frame);
-            if(ret < 0) {
-                if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
-                else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
-                
-                return -1;
-            }
-            
-            while (true) {
-                out_packet = av_packet_alloc();
-                out_packet->data = nullptr;
-                out_packet->size = 0;
-                
-                ret = avcodec_receive_packet(outAVCodecContext, out_packet);
-                
-                out_packet->pts = av_rescale_q(out_packet->pts, outAVCodecContext->time_base, video_st->time_base);
-                
-                out_packet->dts = av_rescale_q(out_packet->dts, outAVCodecContext->time_base, video_st->time_base);
-                
-                
-                if(ret >= 0) {
-                    // invece di av_write_frame
-                    ret = av_interleaved_write_frame(outputFormatContext, out_packet);
-                    if(ret < 0) {
-                        cout << "Error in writing packet";
-                        return -3;
-                    }
-                    ii++;
-                    av_packet_unref(out_packet);
-                    break;
-                } else if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                    break;
-                } else if (ret == AVERROR(EINVAL)) {
-                    cout << "AVERROR(EINVAL)" << endl;
-                    return -1;
-                } else {
-                    cout << "Undefined error" << endl;
-                    return -2;
-                }
-            }
-            
-        }
-    }
-    
-    value = av_write_trailer(outputFormatContext);
-    if( value < 0) {
-        cout<<"\nerror in writing av trailer";
-        return -1;
-    }
-    
-    avformat_free_context(outputFormatContext);
-    
-    return 0;
 }
 
 /* establishing the connection between camera or screen through its respective folder */
@@ -211,7 +84,7 @@ int ScreenRecorder::openCamera() {
     }
 #endif
 
-    if(av_dict_set( &options,"enc_time_base","1:30",0 ) < 0) {
+   /* if(av_dict_set( &options,"enc_time_base","1:15",0 ) < 0) {
         cout<<"\nerror in setting dictionary value";
         return 1;
     }
@@ -219,7 +92,7 @@ int ScreenRecorder::openCamera() {
     if(av_dict_set( &options, "preset", "medium", 0 ) < 0) {
         cout<<"\nerror in setting preset values";
         return 1;
-    }
+    }*/
     
     //av_dict_set(&options, "probesize", "10M", 0); // add an entry
     if(avformat_find_stream_info(formatContext, &options) < 0) {
@@ -228,7 +101,6 @@ int ScreenRecorder::openCamera() {
     }
     
     decoder = nullptr;
-    
     VideoStreamIndx = av_find_best_stream(formatContext, AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
     
     /* find the first video stream index . Also there is an API available to do the below operations */
@@ -247,9 +119,9 @@ int ScreenRecorder::openCamera() {
     }
     
     decoder = avcodec_find_decoder(formatContext->streams[VideoStreamIndx]->codecpar->codec_id);
-    
+    //alloc theAVCodecContext and set its fields to default values.
     codecContext = avcodec_alloc_context3(decoder);
-    
+
     avcodec_parameters_to_context(codecContext, formatContext->streams[VideoStreamIndx]->codecpar);
     
     // assign pAVFormatContext to VideoStreamIndx
@@ -262,8 +134,8 @@ int ScreenRecorder::openCamera() {
      return 1;
      }
      */
-    
-    //    value = avcodec_open2(codecContext, decoder, NULL);
+
+    //Initialize the AVCodecContext to use the given AVCodec.
     value = avcodec_open2(codecContext, decoder, NULL);
     if( value < 0 ) {
         cout<<"\nunable to open the av codec";
@@ -284,36 +156,35 @@ int ScreenRecorder::init_outputfile() {
         cout<<"\nerror in allocating av format output context";
         return 1;
     }
-    
+    //create AVStream
     video_st = avformat_new_stream(outputFormatContext ,NULL);
     if( !video_st ) {
         cout<<"\nerror in creating a av format new stream";
         return 1;
     }
-    
+    encoder = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
+    //alloc AVCodecContext
     outAVCodecContext = avcodec_alloc_context3(encoder);
     if( !outAVCodecContext ) {
-        cout<<"\nerror in allocating the codec contexts";
+        cout<<"\nerror in allocating th codec contexts";
         return 1;
     }
     
-    //avcodec_parameters_to_context(outAVCodecContext, video_st->codecpar);
+    avcodec_parameters_to_context(outAVCodecContext, video_st->codecpar);
     
     /* set property of the video file */
     outAVCodecContext = video_st->codec;
-    outAVCodecContext->codec_id = AV_CODEC_ID_MPEG4;// AV_CODEC_ID_MPEG4; // AV_CODEC_ID_H264 // AV_CODEC_ID_MPEG1VIDEO
+
+    outAVCodecContext->codec_id = AV_CODEC_ID_MPEG4;
     outAVCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
     outAVCodecContext->pix_fmt  = AV_PIX_FMT_YUV420P;
-    outAVCodecContext->bit_rate = 8000000; // 2500000
+    outAVCodecContext->bit_rate = 9000*1024*2; // 2500000
     outAVCodecContext->width = 3840;
     outAVCodecContext->height = 1080;
-    outAVCodecContext->gop_size = 3;
+    outAVCodecContext->gop_size = 50;
     outAVCodecContext->max_b_frames = 1;
-    outAVCodecContext->time_base = {1, 30};
-    
-    if (codec_id == AV_CODEC_ID_H264) {
-        av_opt_set(outAVCodecContext->priv_data, "preset", "slow", 0);
-    }
+    video_st->time_base = {1, 15};
+    outAVCodecContext->time_base = video_st->time_base;
     
     encoder = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
     if( !encoder )
@@ -358,5 +229,131 @@ int ScreenRecorder::init_outputfile() {
         return 1;
     }
     
+    return 0;
+}
+
+/* function to capture and store data in frames by allocating required memory and auto deallocating the memory.   */
+int ScreenRecorder::CaptureVideoFrames() {
+    value = 0;
+
+
+
+    /*frame = av_frame_alloc();
+    if( !frame )
+    {
+        cout<<"\nunable to release the avframe resources";
+        return 1;
+    }*/
+
+    SwsContext* swsCtx_ ;
+    swsCtx_ = sws_getContext(codecContext->width,
+                             codecContext->height,
+                             codecContext->pix_fmt,
+                             outAVCodecContext->width,
+                             outAVCodecContext->height,
+                             outAVCodecContext->pix_fmt,
+                             SWS_BICUBIC, NULL, NULL, NULL);
+
+
+    int ii = 0;
+    int no_frames = 100;
+    cout<<"\nenter No. of frames to capture : ";
+    cin>>no_frames;
+
+    AVFrame *out_frame = nullptr;
+    out_frame = av_frame_alloc();
+    out_frame->format = outAVCodecContext->pix_fmt;
+    out_frame->width  = outAVCodecContext->width;
+    out_frame->height = outAVCodecContext->height;
+    av_frame_get_buffer(out_frame, 0);
+
+    inputPacket = av_packet_alloc();
+
+    AVPacket *out_packet = av_packet_alloc();
+    av_read_frame( formatContext , inputPacket );
+    while(true) {
+        if(av_read_frame( formatContext , inputPacket ) < 0) break;
+        if( ii > no_frames ) {
+            av_packet_unref(out_packet);
+            break;
+        }
+
+        //cout << "Row: " << ii << endl;
+        int ret;
+        if(inputPacket->stream_index == VideoStreamIndx) {
+            ret = avcodec_send_packet(codecContext, inputPacket);
+            if(ret < 0) {
+                if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
+                else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
+
+                return -1;
+            }
+
+            AVFrame *in_frame = av_frame_alloc();
+            ret = avcodec_receive_frame(codecContext, in_frame);
+            if(ret < 0) {
+                if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
+                else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
+
+                return -1;
+            }
+
+            if (ret < 0) {
+                fprintf(stderr, "Could not allocate raw picture buffer\n");
+                return -1;;
+            }
+
+            sws_scale(swsCtx_, in_frame->data, in_frame->linesize, 0, codecContext->height, out_frame->data,out_frame->linesize);
+
+            ret = avcodec_send_frame(outAVCodecContext, out_frame);
+            if(ret < 0) {
+                if(ret == AVERROR(EAGAIN)) cout << "AVERROR(EAGAIN)" << endl;
+                else if(ret == AVERROR(EINVAL)) cout << "AVERROR(EINVAL)" << endl;
+
+                return -1;
+            }
+
+            while (true) {
+                out_packet = av_packet_alloc();
+                out_packet->data = nullptr;
+                out_packet->size = 0;
+
+                ret = avcodec_receive_packet(outAVCodecContext, out_packet);
+
+                out_packet->pts = av_rescale_q(out_packet->pts, outAVCodecContext->time_base, video_st->time_base);
+
+                out_packet->dts = av_rescale_q(out_packet->dts, outAVCodecContext->time_base, video_st->time_base);
+
+
+                if(ret >= 0) {
+                    // invece di av_write_frame
+                    ret = av_interleaved_write_frame(outputFormatContext, out_packet);
+                    if(ret < 0) {
+                        cout << "Error in writing packet";
+                        return -3;
+                    }
+                    ii++;
+                    av_packet_unref(out_packet);
+                    break;
+                } else if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    break;
+                } else if (ret == AVERROR(EINVAL)) {
+                    cout << "AVERROR(EINVAL)" << endl;
+                    return -1;
+                } else {
+                    cout << "Undefined error" << endl;
+                    return -2;
+                }
+            }
+        }
+    }
+    value = av_write_trailer(outputFormatContext);
+    if( value < 0) {
+        cout<<"\nerror in writing av trailer";
+        return -1;
+    }
+
+    avformat_free_context(outputFormatContext);
+
     return 0;
 }
