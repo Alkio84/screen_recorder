@@ -70,7 +70,7 @@ private:
 
     AVDictionary *options;
 
-    AVStream *video_st;    
+    AVStream *video_st;
 
     int value;
     int VideoStreamIndx;
