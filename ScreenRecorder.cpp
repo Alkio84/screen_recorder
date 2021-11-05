@@ -45,26 +45,14 @@ int openInput(AVFormatContext *formatContext, AVDictionary *options) {
     #ifdef _WIN32
     #if USE_DSHOW
         inputFormat=av_find_input_format("dshow");
-        if(avformat_open_input(&formatContext,"video=screen-capture-recorder",inputFormat,NULL)!=0){
-            printf("Couldn't open input stream.\n");
-            return -1;
-        }
+        return avformat_open_input(&formatContext,"video=screen-capture-recorder",inputFormat,NULL)!=0);
     #else
-        AVDictionary* options = NULL;
         inputFormat = av_find_input_format("gdigrab");
-        if(avformat_open_input(&formatContext,"desktop",inputFormat,&options)!=0){
-            printf("Couldn't open input stream.\n");
-            return -1;
-        }
-        
+        return avformat_open_input(&formatContext,"desktop",inputFormat,&options);
     #endif
     #elif defined linux
-        AVDictionary* options = NULL;
         inputFormat=av_find_input_format("x11grab");
-        if(avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options)!=0){
-            printf("Couldn't open input stream.\n");
-            return -1;
-        }
+        return avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options);
     #else
         show_avfoundation_device();
         inputFormat=av_find_input_format("avfoundation");
@@ -97,12 +85,13 @@ int ScreenRecorder::openCamera() {
         return 1;
     }
     
-    if(av_dict_set( &options, "preset", "medium", 0 ) < 0) {
+    if(av_dict_set( &options, "preset", "ultrafast", 0 ) < 0) {
         cout<<"\nerror in setting preset values";
         return 1;
     }*/
     
     //av_dict_set(&options, "probesize", "10M", 0); // add an entry
+    inputFormatContext->probesize = 50000000;
     if(avformat_find_stream_info(inputFormatContext, &options) < 0) {
         cout<<"\nunable to find the stream information";
         return 1;
@@ -158,7 +147,7 @@ int ScreenRecorder::init_outputfile() {
     outputFormatContext = NULL;
     int value = 0;
     
-    std::string outputFile = "/Users/checco/Downloads/output.mp4";
+    std::string outputFile = "../Recordings/output.mp4";
     
     avformat_alloc_output_context2(&outputFormatContext, NULL, NULL, outputFile.c_str());
     if (!outputFormatContext) {
@@ -172,36 +161,34 @@ int ScreenRecorder::init_outputfile() {
         return 1;
     }
     encoder = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
+    if( !encoder )
+    {
+        cout<<"\nerror in finding the av codecs. try again with correct codec";
+        return 1;
+    }
     //alloc AVCodecContext
     encoderContext = avcodec_alloc_context3(encoder);
     if( !encoderContext ) {
         cout<<"\nerror in allocating th codec contexts";
         return 1;
     }
-    
+
+    video_st->codecpar->codec_id = AV_CODEC_ID_MPEG4;
+    video_st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+    video_st->codecpar->bit_rate = 9000*1024*2; // 2500000
+    video_st->codecpar->width = 3840;
+    video_st->codecpar->height = 1080;
+    video_st->time_base = {1, 15};
+
     avcodec_parameters_to_context(encoderContext, video_st->codecpar);
     
     /* set property of the video file */
-    encoderContext = video_st->codec;
-
-    encoderContext->codec_id = AV_CODEC_ID_MPEG4;
-    encoderContext->codec_type = AVMEDIA_TYPE_VIDEO;
     encoderContext->pix_fmt  = AV_PIX_FMT_YUV420P;
-    encoderContext->bit_rate = 9000*1024*2; // 2500000
-    encoderContext->width = 3840;
-    encoderContext->height = 1080;
-    encoderContext->gop_size = 50;
-    encoderContext->max_b_frames = 1;
-    video_st->time_base = {1, 15};
-    encoderContext->time_base = video_st->time_base;
+    encoderContext->time_base = {1, 15};
+
+
     
-    encoder = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
-    if( !encoder )
-    {
-        cout<<"\nerror in finding the av codecs. try again with correct codec";
-        return 1;
-    }
-    
+
     /* Some container formats (like MP4) require global headers to be present
      Mark the encoder so that it behaves accordingly. */
     if ( outputFormatContext->oformat->flags & AVFMT_GLOBALHEADER)
