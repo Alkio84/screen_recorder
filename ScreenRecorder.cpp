@@ -172,12 +172,16 @@ int ScreenRecorder::init_outputfile() {
         cout<<"\nerror in allocating th codec contexts";
         return 1;
     }
+    
+    /* In futuro dovremo mettere dei parametri per scegliere la risoluzione */
+    unsigned int width, height;
+    ScreenSize::getScreenResolution(width, height);
 
     video_st->codecpar->codec_id = AV_CODEC_ID_MPEG4;
     video_st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
     video_st->codecpar->bit_rate = 9000*1024*2; // 2500000
-    video_st->codecpar->width = 3840;
-    video_st->codecpar->height = 1080;
+    video_st->codecpar->width = width;
+    video_st->codecpar->height = height;
     video_st->time_base = {1, 15};
 
     avcodec_parameters_to_context(encoderContext, video_st->codecpar);
@@ -186,8 +190,6 @@ int ScreenRecorder::init_outputfile() {
     encoderContext->pix_fmt  = AV_PIX_FMT_YUV420P;
     encoderContext->time_base = {1, 15};
 
-
-    
 
     /* Some container formats (like MP4) require global headers to be present
      Mark the encoder so that it behaves accordingly. */

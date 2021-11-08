@@ -17,6 +17,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "ScreenSize.h"
+
 #define __STDC_CONSTANT_MACROS
 
 //FFMPEG LIBRARIES
@@ -84,7 +86,6 @@ public:
     int openCamera();
     int init_outputfile();
     int CaptureVideoFrames();
-
 };
 
 #endif

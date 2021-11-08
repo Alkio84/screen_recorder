@@ -44,15 +44,15 @@ using namespace std;
 #include "ScreenRecorder.h"
 
 /* driver function to run the application */
- int main() {
-     ScreenRecorder screen_record;
- 
-     if(screen_record.openCamera() != 0) return -1;
-     std::cout<<"opened camera"<<std::endl;
-     if(screen_record.init_outputfile() != 0) return -1;
+int main() {
+    ScreenRecorder screen_record;
+    
+    if(screen_record.openCamera() != 0) return -1;
+    std::cout<<"opened camera"<<std::endl;
+    if(screen_record.init_outputfile() != 0) return -1;
     std::cout<<"input file created"<<std::endl;
-     if(screen_record.CaptureVideoFrames() != 0) return -1;
-     cout<<"\nprogram executed successfully\n";
- 
-     return 0;
- }
+    if(screen_record.CaptureVideoFrames() != 0) return -1;
+    cout<<"\nprogram executed successfully\n";
+    
+    return 0;
+}
