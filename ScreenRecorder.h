@@ -55,37 +55,99 @@ extern "C"
 
 }
 
-class ScreenRecorder
-{
+class ScreenRecorder {
 private:
     AVInputFormat *inputFormat;
     AVOutputFormat *outputFormat;
-
+    
     AVCodecContext *decoderContext;
     AVCodecContext *encoderContext;
-
+    
     AVFormatContext *inputFormatContext;
     AVFormatContext *outputFormatContext;
-
+    
     AVCodec *decoder;
     AVCodec *encoder;
-
-    AVDictionary *options;
-
+        
     AVStream *video_st;
-
-    int value;
+    
     int VideoStreamIndx;
-
+        
+    /* Output file resolution */
+    unsigned int width, height;
+    /* Viewport corners (x, y)*/
+    std::pair<int, int> bottomLeft, topRight;
+    /* Output file name */
+    std::string filename;
 public:
-
     ScreenRecorder();
     ~ScreenRecorder();
-
-    /* function to initiate communication with display library */
-    int openCamera();
-    int init_outputfile();
+    
     int CaptureVideoFrames();
+        
+    /* MANAGE FLOW */
+    void Start();
+    void Pause();
+    void Resume();
+    void Stop();
+    
+    /* ENUMS */
+    enum Resolution {
+        MAXIMUM
+    };
+    
+    enum ViewPort {
+        FULLSCREEN,
+        RIGHT_HALF,
+        LEFT_HALF,
+        TOP_HALF,
+        BOTTOM_HALF
+    };
+    
+    /* SETTERS */
+    ; /* Set output file resolution */
+    void setResolution(unsigned int width, unsigned int height) {
+        this->width = width;
+        this->height = height;
+    }
+    
+    void setResolution(Resolution resolution) {
+        switch (resolution) {
+            case MAXIMUM:
+                ScreenSize::getScreenResolution(this->width, this->height);
+                break;
+                
+            default:
+                break;
+        }
+    }
+    
+    /* Set viewport with bottom left corner and top right corner */
+    void setViewPortFromCorners1(std::pair<int, int> bottomLeft, std::pair<int, int> topRight) {
+        this->bottomLeft = bottomLeft;
+        this->topRight = topRight;
+    };
+    
+    /* Set viewport with top left corner and bottom right corner */
+    void setViewPortFromCorners2(std::pair<int, int> topLeft, std::pair<int, int> bottomRight) {
+        this->bottomLeft = std::make_pair(topLeft.first, bottomRight.second);
+        this->topRight = std::make_pair(bottomRight.first, topLeft.second);
+    };
+    
+    /* Set viewport with bottom left corner dimensions */
+    void setViewPort(std::pair<int, int> bottomLeft, int width, int height) {
+        this->bottomLeft = bottomLeft;
+        this->topRight = std::make_pair(bottomLeft.first + width, bottomLeft.second + height);
+    };
+    
+    /* Set viewport from keyword */
+    void setViewPort(ViewPort viewport) {
+        
+    };
+    
+    void setOutputFile(std::string filename) {
+        this->filename = filename;
+    };
 };
 
 #endif

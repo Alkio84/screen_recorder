@@ -45,14 +45,12 @@ using namespace std;
 
 /* driver function to run the application */
 int main() {
-    ScreenRecorder screen_record;
+    ScreenRecorder screenRecorder{};
     
-    if(screen_record.openCamera() != 0) return -1;
-    std::cout<<"opened camera"<<std::endl;
-    if(screen_record.init_outputfile() != 0) return -1;
-    std::cout<<"input file created"<<std::endl;
-    if(screen_record.CaptureVideoFrames() != 0) return -1;
-    cout<<"\nprogram executed successfully\n";
+    screenRecorder.setOutputFile("/Users/checco/Downloads/Recordings/output.mp4");
+    screenRecorder.setResolution(ScreenRecorder::MAXIMUM);
+    
+    screenRecorder.Start();
     
     return 0;
 }
