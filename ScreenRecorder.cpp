@@ -176,7 +176,6 @@ int ScreenRecorder::init_outputfile() {
     /* In futuro dovremo mettere dei parametri per scegliere la risoluzione */
     unsigned int width, height;
     ScreenSize::getScreenResolution(width, height);
-
     video_st->codecpar->codec_id = AV_CODEC_ID_MPEG4;
     video_st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
     video_st->codecpar->bit_rate = 9000*1024*2; // 2500000

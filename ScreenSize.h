@@ -21,8 +21,14 @@ class ScreenSize {
 public:
     static void getScreenResolution(unsigned int& width, unsigned int& height) {
 #if WIN32
-        width = (int)GetSystemMetrics(SM_CXSCREEN);
-        height = (int)GetSystemMetrics(SM_CYSCREEN);
+        width = (int)GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        height = (int)GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+        /*std::cout << "Numero Schermi: " << GetSystemMetrics(SM_CMONITORS) << std::endl;
+        std::cout << "Larghezza Schermo: " << GetSystemMetrics(SM_CXVIRTUALSCREEN) << std::endl;
+        std::cout << "Altezza Schermo: " << GetSystemMetrics(SM_CYVIRTUALSCREEN) << std::endl;
+        std::cout << "Lato sinistro: " << GetSystemMetrics(SM_XVIRTUALSCREEN) << std::endl;
+        std::cout << "Lato alto: " << GetSystemMetrics(SM_YVIRTUALSCREEN) << std::endl;*/
 #else
         auto mainDisplayId = CGMainDisplayID();
         
