@@ -17,6 +17,8 @@
 #include <math.h>
 #include <string.h>
 
+#include <map>
+
 #include "ScreenSize.h"
 
 #define __STDC_CONSTANT_MACROS
@@ -79,6 +81,8 @@ private:
     std::pair<int, int> bottomLeft, topRight;
     /* Output file name */
     std::string filename;
+    /* Framerate */
+    int framerate;
 public:
     ScreenRecorder();
     ~ScreenRecorder();
@@ -98,14 +102,14 @@ public:
     
     enum ViewPort {
         FULLSCREEN,
-        RIGHT_HALF,
         LEFT_HALF,
+        RIGHT_HALF,
         TOP_HALF,
         BOTTOM_HALF
     };
     
     /* SETTERS */
-    ; /* Set output file resolution */
+    /* Set output file resolution */
     void setResolution(unsigned int width, unsigned int height) {
         this->width = width;
         this->height = height;
@@ -147,6 +151,10 @@ public:
     
     void setOutputFile(std::string filename) {
         this->filename = filename;
+    };
+    
+    void setFrameRate(int framerate) {
+        this->framerate = framerate;
     };
 };
 

@@ -49,6 +49,7 @@ int main() {
     
     screenRecorder.setOutputFile("/Users/checco/Downloads/Recordings/output.mp4");
     screenRecorder.setResolution(ScreenRecorder::MAXIMUM);
+    screenRecorder.setFrameRate(30);
     
     screenRecorder.Start();
     
