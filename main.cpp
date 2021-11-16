@@ -32,7 +32,7 @@ extern "C"
 #define OUTPUT_YUV420P 0
 //'1' Use Dshow
 //'0' Use GDIgrab
-#define USE_DSHOW 0
+#define USE_DSHOW 1
 
 //Refresh Event
 #define SFM_REFRESH_EVENT  (SDL_USEREVENT + 1)
@@ -42,16 +42,26 @@ extern "C"
 using namespace std;
 
 #include "ScreenRecorder.h"
-
+#include <chrono>
+#include <thread>
 /* driver function to run the application */
 int main() {
     ScreenRecorder screenRecorder{};
     
-    screenRecorder.setOutputFile("/Users/checco/Downloads/Recordings/output.mp4");
+    screenRecorder.setOutputFile("../Recordings/output.mp4");
     screenRecorder.setResolution(ScreenRecorder::MAXIMUM);
-    screenRecorder.setFrameRate(30);
-    
+    screenRecorder.setFrameRate(15);
+
     screenRecorder.Start();
-    
+    std::cout<<"started"<<std::endl;
+    std::this_thread::sleep_for(3s);
+    screenRecorder.Pause();
+    std::cout<<"paused"<<std::endl;
+    std::this_thread::sleep_for(2s);
+    screenRecorder.Resume();
+    std::cout<<"resumed"<<std::endl;
+    std::this_thread::sleep_for(3s);
+    screenRecorder.Stop();
+    std::cout<<"stopped"<<std::endl;
     return 0;
 }

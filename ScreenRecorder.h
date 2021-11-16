@@ -16,8 +16,10 @@
 #include <cstring>
 #include <math.h>
 #include <string.h>
-
 #include <map>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
 
 #include "ScreenSize.h"
 
@@ -74,7 +76,7 @@ private:
     AVStream *video_st;
     
     int VideoStreamIndx;
-        
+    int no_frames;
     /* Output file resolution */
     unsigned int width, height;
     /* Viewport corners (x, y)*/
@@ -83,12 +85,21 @@ private:
     std::string filename;
     /* Framerate */
     int framerate;
+    /*Thread Management*/
+    std::thread recorder;
+    bool capture = true;
+    bool end = false;
+    std::mutex m;
+    std::condition_variable cv;
+
+
+    int InitRegistration();
+    int CaptureVideoFrames();
+
 public:
     ScreenRecorder();
     ~ScreenRecorder();
-    
-    int CaptureVideoFrames();
-        
+
     /* MANAGE FLOW */
     void Start();
     void Pause();
