@@ -12,14 +12,14 @@
 #if WIN32
 #include <windows.h>
 #else
-#include <CoreGraphics/CoreGraphics.h>
+#include "CoreGraphics/CoreGraphics.h"
 #endif
 
 #endif
 
 class ScreenSize {
 public:
-    static void getScreenResolution(unsigned int& width, unsigned int& height) {
+    static void getScreenResolution(int& width, int& height) {
 #if WIN32
         width = (int)GetSystemMetrics(SM_CXSCREEN);
         height = (int)GetSystemMetrics(SM_CYSCREEN);
@@ -33,7 +33,6 @@ public:
         std::cout << "Lato alto: " << GetSystemMetrics(SM_YVIRTUALSCREEN) << std::endl;*/
 #else
         auto mainDisplayId = CGMainDisplayID();
-        
         /*
         std::cout << "Current resolution was "
         << CGDisplayPixelsWide(mainDisplayId) << 'x'

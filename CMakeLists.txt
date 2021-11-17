@@ -9,6 +9,12 @@ IF(WIN32)
     LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/lib)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 ELSE()
+    find_library(CoreFoundation CoreFoundation)
+    find_library(CoreGraphics CoreGraphics)
+    if (NOT FoundationLib)
+        message(FATAL_ERROR "AudioUnit not found")
+    endif()
+
     INCLUDE_DIRECTORIES(/usr/local/Cellar/ffmpeg/4.4_2/include)
     LINK_DIRECTORIES(/usr/local/Cellar/ffmpeg/4.4_2/lib)
 ENDIF()
@@ -17,4 +23,15 @@ add_executable(${PROJECT_NAME}
         ScreenRecorder.h
         ScreenRecorder.cpp
         )
-target_link_libraries(screen_recorder avcodec avformat swscale avdevice avfilter avutil postproc swresample)
+target_link_libraries(screen_recorder
+        avcodec
+        avformat
+        swscale
+        avdevice
+        avfilter
+        avutil
+        postproc
+        swresample
+        ${CoreFoundation}
+        ${CoreGraphics}
+        )

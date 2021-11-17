@@ -16,6 +16,7 @@
 #include <cstring>
 #include <math.h>
 #include <string.h>
+
 #include <map>
 #include <mutex>
 #include <thread>
@@ -26,8 +27,7 @@
 #define __STDC_CONSTANT_MACROS
 
 //FFMPEG LIBRARIES
-extern "C"
-{
+extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavcodec/avfft.h"
 
@@ -63,39 +63,31 @@ class ScreenRecorder {
 private:
     AVInputFormat *inputFormat;
     AVOutputFormat *outputFormat;
-    
     AVCodecContext *decoderContext;
     AVCodecContext *encoderContext;
-    
     AVFormatContext *inputFormatContext;
     AVFormatContext *outputFormatContext;
-    
     AVCodec *decoder;
     AVCodec *encoder;
-        
-    AVStream *video_st;
-    
-    int VideoStreamIndx;
-    int no_frames;
-    /* Output file resolution */
-    unsigned int width, height;
-    /* Viewport corners (x, y)*/
+    AVStream *videoStream;
+    int videoStreamIndex;
+
+    /* Configure before starting the video */
+    void Configure();
+    void Capture();
+
+    bool audio;
+    int width, height;
     std::pair<int, int> bottomLeft, topRight;
-    /* Output file name */
     std::string filename;
-    /* Framerate */
     int framerate;
+
     /*Thread Management*/
     std::thread recorder;
     bool capture = true;
     bool end = false;
     std::mutex m;
     std::condition_variable cv;
-
-
-    int InitRegistration();
-    int CaptureVideoFrames();
-
 public:
     ScreenRecorder();
     ~ScreenRecorder();
@@ -108,7 +100,8 @@ public:
     
     /* ENUMS */
     enum Resolution {
-        MAXIMUM
+        ORIGINAL,
+        HALF
     };
     
     enum ViewPort {
@@ -121,22 +114,28 @@ public:
     
     /* SETTERS */
     /* Set output file resolution */
-    void setResolution(unsigned int width, unsigned int height) {
+    void setResolution(int width, int height) {
         this->width = width;
         this->height = height;
     }
-    
+
     void setResolution(Resolution resolution) {
         switch (resolution) {
-            case MAXIMUM:
-                ScreenSize::getScreenResolution(this->width, this->height);
+            case ORIGINAL:
+                ScreenSize::getScreenResolution(width, height);
                 break;
-                
+            case HALF:
+
+                break;
             default:
                 break;
         }
     }
-    
+
+    void recordAudio(bool audio) {
+        this->audio = audio;
+    }
+
     /* Set viewport with bottom left corner and top right corner */
     void setViewPortFromCorners1(std::pair<int, int> bottomLeft, std::pair<int, int> topRight) {
         this->bottomLeft = bottomLeft;

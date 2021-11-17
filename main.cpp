@@ -32,7 +32,7 @@ extern "C"
 #define OUTPUT_YUV420P 0
 //'1' Use Dshow
 //'0' Use GDIgrab
-#define USE_DSHOW 1
+#define USE_DSHOW 0
 
 //Refresh Event
 #define SFM_REFRESH_EVENT  (SDL_USEREVENT + 1)
@@ -49,8 +49,8 @@ int main() {
     ScreenRecorder screenRecorder{};
     
     screenRecorder.setOutputFile("../Recordings/output.mp4");
-    screenRecorder.setResolution(ScreenRecorder::MAXIMUM);
-    screenRecorder.setFrameRate(15);
+    screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
+    screenRecorder.setFrameRate(30);
 
     screenRecorder.Start();
     std::cout<<"started"<<std::endl;
@@ -63,5 +63,6 @@ int main() {
     std::this_thread::sleep_for(3s);
     screenRecorder.Stop();
     std::cout<<"stopped"<<std::endl;
+
     return 0;
-}
+};
