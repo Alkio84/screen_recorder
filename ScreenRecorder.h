@@ -61,16 +61,23 @@ extern "C" {
 
 class ScreenRecorder {
 private:
-    AVInputFormat *inputFormat;
-    AVOutputFormat *outputFormat;
-    AVCodecContext *decoderContext;
-    AVCodecContext *encoderContext;
+    /* Input and output */
     AVFormatContext *inputFormatContext;
     AVFormatContext *outputFormatContext;
-    AVCodec *decoder;
-    AVCodec *encoder;
+
+    /* Video */
+    AVCodecContext *decoderContext;
+    AVCodecContext *encoderContext;
     AVStream *videoStream;
     int videoStreamIndex;
+
+    /* Audio */
+    AVCodecContext *audioDecoderContext;
+    AVCodec *audioDecoder;
+    int audioStreamIndex;
+
+    /* Converter */
+    SwsContext *swsContext;
 
     /* Configure before starting the video */
     void Configure();
