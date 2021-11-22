@@ -79,8 +79,9 @@ AVCodecContext *configureEncoder(AVStream *stream, AVCodecID id, int framerate) 
     avcodec_parameters_to_context(encoderContext, stream->codecpar);
 
     /* Set property of the video file */
-    if(id == AV_CODEC_ID_MPEG4) encoderContext->pix_fmt = AV_PIX_FMT_YUV420P;
-    else {
+    if(id == AV_CODEC_ID_MPEG4) {
+        encoderContext->pix_fmt = AV_PIX_FMT_YUV420P;
+    } else {
         encoderContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
         encoderContext->sample_rate = 44100; // 44KHz
         encoderContext->channel_layout = AV_CH_LAYOUT_MONO;
@@ -122,7 +123,7 @@ AVStream *configureAudioStream(AVFormatContext *&formatContext, int framerate) {
 
     return audioStream;
 }
-void configureOutput(AVFormatContext *&formatContext, AVCodecContext *&encoderContext, std::string filename) {
+void configureOutput(AVFormatContext *&formatContext, AVCodecContext *&encoderContext, AVCodecContext *&enc, std::string filename) {
     /* Create empty video file */
     if (!(formatContext->flags & AVFMT_NOFILE))
         if (avio_open2(&formatContext->pb, filename.c_str(), AVIO_FLAG_WRITE, NULL, NULL) < 0)
@@ -130,7 +131,9 @@ void configureOutput(AVFormatContext *&formatContext, AVCodecContext *&encoderCo
 
     /* Some container formats (like MP4) require global headers to be present
 Mark the encoder so that it behaves accordingly. */
-    if (formatContext->oformat->flags & AVFMT_GLOBALHEADER) encoderContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    if (formatContext->oformat->flags & AVFMT_GLOBALHEADER) {
+        encoderContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    }
 
     if (!formatContext->nb_streams)
         throw std::runtime_error("Output file does not contain any stream video header.");
@@ -187,7 +190,7 @@ void ScreenRecorder::Configure() {
     encoderContext = configureEncoder(videoStream, AV_CODEC_ID_MPEG4, framerate);
     //audioEncoderContext = configureEncoder(audioStream, AV_CODEC_ID_AAC, framerate);
     /* Configure output setting and write file header */
-    configureOutput(outputFormatContext, encoderContext, filename);
+    configureOutput(outputFormatContext, encoderContext, audioEncoderContext, filename);
 
     swsContext = sws_getContext(decoderContext->width, decoderContext->height, decoderContext->pix_fmt,
                                 encoderContext->width, encoderContext->height, encoderContext->pix_fmt,
