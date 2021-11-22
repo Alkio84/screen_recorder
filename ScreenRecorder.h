@@ -73,7 +73,8 @@ private:
 
     /* Audio */
     AVCodecContext *audioDecoderContext;
-    AVCodec *audioDecoder;
+    AVCodecContext *audioEncoderContext;
+    AVStream *audioStream;
     int audioStreamIndex;
 
     /* Converter */
