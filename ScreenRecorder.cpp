@@ -16,14 +16,17 @@ AVFormatContext *configureInput(AVDictionary *options) {
 #ifdef _WIN32
 #if USE_DSHOW
     inputFormat=av_find_input_format("dshow");
-    return avformat_open_input(&formatContext,"video=screen-capture-recorder",inputFormat,NULL)!=0);
+    if(avformat_open_input(&formatContext,"video=screen-capture-recorder",inputFormat,NULL) != 0)
+        throw std::runtime_error("Error in opening input.");
 #else
     inputFormat = av_find_input_format("gdigrab");
-    return avformat_open_input(&formatContext,"desktop",inputFormat,&options);
+    if(avformat_open_input(&formatContext,"desktop",inputFormat,&options) != 0)
+        throw std::runtime_error("Error in opening input.");
 #endif
 #elif defined linux
     inputFormat=av_find_input_format("x11grab");
-    return avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options);
+    if(avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options) != 0)
+        throw std::runtime_error("Error in opening input.");
 #else
     inputFormat = av_find_input_format("avfoundation");
     if(avformat_open_input(&formatContext, "1:0", inputFormat, &options) != 0)
@@ -92,6 +95,65 @@ AVCodecContext *configureEncoder(AVStream *stream, AVCodecID id, int framerate) 
         throw std::runtime_error("Error in opening the avcodec for " + id);
 
     return encoderContext;
+}
+void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceContext, AVFilterContext *&sinkContext, AVFilterGraph *&filterGraph, const std::string filtersDesc) {
+    const AVFilter *bufferSource = avfilter_get_by_name("buffer");
+    const AVFilter *bufferSink = avfilter_get_by_name("buffersink");
+    AVFilterInOut *inputs  = avfilter_inout_alloc();
+    AVFilterInOut *outputs = avfilter_inout_alloc();
+    filterGraph = avfilter_graph_alloc();
+    const std::string args = "video_size=" + std::to_string(decoderContext->width) +
+            "x" + std::to_string(decoderContext->height) +
+            ":pix_fmt=" + std::to_string(decoderContext->pix_fmt) +
+            ":time_base=" + std::to_string(decoderContext->time_base.num) +
+            "/" + std::to_string(decoderContext->time_base.den) +
+            ":pixel_aspect=" + std::to_string(decoderContext->sample_aspect_ratio.num) +
+            "/" + std::to_string(decoderContext->sample_aspect_ratio.den);
+
+
+    if (!outputs || !inputs || !filterGraph) {
+        avfilter_inout_free(&inputs);
+        avfilter_inout_free(&outputs);
+        throw std::runtime_error("Error in inizializing filter graph");
+    }
+
+    if(avfilter_graph_create_filter(&sourceContext, bufferSource, "in", &args[0], NULL, filterGraph) < 0){
+        avfilter_inout_free(&inputs);
+        avfilter_inout_free(&outputs);
+        throw std::runtime_error("Error in inizializing input filters");
+    }
+
+    if(avfilter_graph_create_filter(&sinkContext, bufferSink, "out", NULL, NULL, filterGraph) < 0){
+        avfilter_inout_free(&inputs);
+        avfilter_inout_free(&outputs);
+        throw std::runtime_error("Error in inizializing output filters");
+    }
+
+    /* Connecting bufferSink input to bufferSource output */
+    inputs->name       = av_strdup("out");
+    inputs->filter_ctx = sinkContext;
+    inputs->pad_idx    = 0;
+    inputs->next       = NULL;
+    /* Connecting bufferSource output to bufferSink input */
+    outputs->name       = av_strdup("in");
+    outputs->filter_ctx = sourceContext;
+    outputs->pad_idx    = 0;
+    outputs->next       = NULL;
+
+    if (avfilter_graph_parse_ptr(filterGraph, reinterpret_cast<const char *>(filtersDesc[0]), &inputs, &outputs, NULL) < 0){
+        avfilter_inout_free(&inputs);
+        avfilter_inout_free(&outputs);
+        throw std::runtime_error("Error in inizializing output filters");
+    }
+
+    if (avfilter_graph_config(filterGraph, NULL) < 0){
+        avfilter_inout_free(&inputs);
+        avfilter_inout_free(&outputs);
+        throw std::runtime_error("Error in inizializing output filters");
+    }
+
+    avfilter_inout_free(&inputs);
+    avfilter_inout_free(&outputs);
 }
 AVStream *configureVideoStream(AVFormatContext *&formatContext, int width, int height, int framerate) {
     /* Alloc and set stream */
@@ -195,6 +257,9 @@ void ScreenRecorder::Configure() {
     swsContext = sws_getContext(decoderContext->width, decoderContext->height, decoderContext->pix_fmt,
                                 encoderContext->width, encoderContext->height, encoderContext->pix_fmt,
                                 SWS_BICUBIC, NULL, NULL, NULL);
+    /* Configure filter crop */
+
+    configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, desc);
 
     /* Clean avformat and pause it */
     av_read_pause(inputFormatContext);
@@ -205,12 +270,17 @@ void ScreenRecorder::Capture() {
     AVPacket *inputPacket = av_packet_alloc();
     AVPacket *outputPacket = av_packet_alloc();
     AVFrame *inputFrame = av_frame_alloc();
+    AVFrame *filteredFrame = av_frame_alloc();
 
     AVFrame *outputFrame = av_frame_alloc();
     outputFrame->format = encoderContext->pix_fmt;
     outputFrame->width = encoderContext->width;
     outputFrame->height = encoderContext->height;
     av_frame_get_buffer(outputFrame, 0);
+
+    /*Filters*/
+    AVFilterInOut *inputs  = avfilter_inout_alloc();
+    AVFilterInOut *outputs = avfilter_inout_alloc();
 
     std::unique_lock ul(m);
 
@@ -253,8 +323,26 @@ void ScreenRecorder::Capture() {
                 } else throw std::runtime_error("Error in receiving the decoded frame.");
             }
 
-            /* Resize the inputFrame */
-            if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
+            /* only if we need to crop the image */
+            if(crop){
+                /* Push the decoded frame into the filtergraph */
+                if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                    if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
+                        ul.lock();
+                        continue;
+                    } else throw std::runtime_error("Error in filtering.");
+                }
+                if ((ret = av_buffersink_get_frame(sinkContext, filteredFrame)) < 0) {
+                    if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
+                        ul.lock();
+                        continue;
+                    } else throw std::runtime_error("Error in filtering.");
+                }
+            }
+
+            else
+                /* Resize the inputFrame */
+                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
 
             /* Encoded inputFrame */
             if ((ret = avcodec_send_frame(encCtx, outputFrame)) < 0) {
@@ -292,8 +380,8 @@ void ScreenRecorder::Start() {
 }
 
 void ScreenRecorder::Pause() {
-    av_read_pause(inputFormatContext);
     std::unique_lock ul(m);
+    av_read_pause(inputFormatContext);
     capture = false;
 }
 

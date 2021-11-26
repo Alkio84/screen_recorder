@@ -80,12 +80,18 @@ private:
     /* Converter */
     SwsContext *swsContext;
 
+    /*Filter*/
+    AVFilterContext *sourceContext;
+    AVFilterContext *sinkContext;
+    AVFilterGraph *filterGraph;
+
     /* Configure before starting the video */
     void Configure();
     void Capture();
 
     bool audio;
     int width, height;
+    bool crop = false;
     std::pair<int, int> bottomLeft, topRight;
     std::string filename;
     int framerate;
@@ -148,18 +154,21 @@ public:
     void setViewPortFromCorners1(std::pair<int, int> bottomLeft, std::pair<int, int> topRight) {
         this->bottomLeft = bottomLeft;
         this->topRight = topRight;
+        this->crop = true;
     };
     
     /* Set viewport with top left corner and bottom right corner */
     void setViewPortFromCorners2(std::pair<int, int> topLeft, std::pair<int, int> bottomRight) {
         this->bottomLeft = std::make_pair(topLeft.first, bottomRight.second);
         this->topRight = std::make_pair(bottomRight.first, topLeft.second);
+        this->crop = true;
     };
     
     /* Set viewport with bottom left corner dimensions */
     void setViewPort(std::pair<int, int> bottomLeft, int width, int height) {
         this->bottomLeft = bottomLeft;
         this->topRight = std::make_pair(bottomLeft.first + width, bottomLeft.second + height);
+        this->crop = true;
     };
     
     /* Set viewport from keyword */
@@ -172,6 +181,10 @@ public:
     };
     
     void setFrameRate(int framerate) {
+#ifdef _WIN32
+        if(framerate > 15) this->framerate = 15;
+        else
+#endif
         this->framerate = framerate;
     };
 };
