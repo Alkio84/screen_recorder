@@ -252,6 +252,8 @@ void ScreenRecorder::Configure() {
     encoderContext = configureEncoder(videoStream, AV_CODEC_ID_MPEG4, framerate);
     //audioEncoderContext = configureEncoder(audioStream, AV_CODEC_ID_AAC, framerate);
     /* Configure output setting and write file header */
+    //encoderContext->height = encoderContext->height - 360;
+    //encoderContext->coded_height = encoderContext->height;
     configureOutput(outputFormatContext, encoderContext, audioEncoderContext, filename);
 
     swsContext = sws_getContext(decoderContext->width, decoderContext->height, decoderContext->pix_fmt,
@@ -259,11 +261,13 @@ void ScreenRecorder::Configure() {
                                 SWS_BICUBIC, NULL, NULL, NULL);
     /* Configure filter crop */
 
-    configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, desc);
+    //configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, "test");
 
     /* Clean avformat and pause it */
     av_read_pause(inputFormatContext);
     avformat_flush(inputFormatContext);
+
+
 }
 
 void ScreenRecorder::Capture() {
@@ -316,17 +320,19 @@ void ScreenRecorder::Capture() {
             }
 
             /* Get decoded inputFrame  */
+
             if ((ret = avcodec_receive_frame(decCtx, inputFrame)) < 0) {
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                     ul.lock();
                     continue;
                 } else throw std::runtime_error("Error in receiving the decoded frame.");
             }
-
+            inputFrame->crop_top = 360;
+            av_frame_apply_cropping(inputFrame, encoderContext->flags & AV_CODEC_FLAG_UNALIGNED ? AV_FRAME_CROP_UNALIGNED : 0);
             /* only if we need to crop the image */
-            if(crop){
+            //if(crop){
                 /* Push the decoded frame into the filtergraph */
-                if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                /*if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
                     if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                         ul.lock();
                         continue;
@@ -338,13 +344,14 @@ void ScreenRecorder::Capture() {
                         continue;
                     } else throw std::runtime_error("Error in filtering.");
                 }
-            }
 
-            else
+            }*/
+
+            //else
                 /* Resize the inputFrame */
-                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
-
+                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
             /* Encoded inputFrame */
+
             if ((ret = avcodec_send_frame(encCtx, outputFrame)) < 0) {
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                     ul.lock();
