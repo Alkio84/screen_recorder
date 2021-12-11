@@ -89,6 +89,7 @@ private:
     void Configure();
     void Capture();
     bool audio;
+    int fullWidth, fullHeight;
     int width, height;
     bool crop = false;
     std::pair<int, int> bottomLeft, topRight;

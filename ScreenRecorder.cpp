@@ -12,13 +12,12 @@ AVFormatContext *configureInput(AVDictionary *options, int width, int height, st
     AVFormatContext *formatContext = avformat_alloc_context();
     formatContext->probesize = 5 * pow(10, 7);
 
-    std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
+    /*std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
     std::string offsetX = std::to_string(std::get<1>(bottomLeft));
     std::string offsetY = std::to_string(std::get<0>(bottomLeft));
     av_dict_set(&options,"video_size", videoSize.c_str(), 0);
     av_dict_set(&options, "offset_x", offsetX.c_str(), 0);
-    av_dict_set(&options, "offset_y", offsetY.c_str(), 0);
-
+    av_dict_set(&options, "offset_y", offsetY.c_str(), 0);*/
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
 #if USE_DSHOW
@@ -112,8 +111,8 @@ void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceCont
     const std::string args = "video_size=" + std::to_string(decoderContext->width) +
             "x" + std::to_string(decoderContext->height) +
             ":pix_fmt=" + std::to_string(decoderContext->pix_fmt) +
-            ":time_base=" + std::to_string(decoderContext->time_base.num) +
-            "/" + std::to_string(decoderContext->time_base.den) +
+            ":time_base=" + std::to_string(1) +
+            "/" + std::to_string(15) +
             ":pixel_aspect=" + std::to_string(decoderContext->sample_aspect_ratio.num) +
             "/" + std::to_string(decoderContext->sample_aspect_ratio.den);
 
@@ -123,8 +122,7 @@ void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceCont
         avfilter_inout_free(&outputs);
         throw std::runtime_error("Error in inizializing filter graph");
     }
-
-    if(avfilter_graph_create_filter(&sourceContext, bufferSource, "in", &args[0], NULL, filterGraph) < 0){
+    if(avfilter_graph_create_filter(&sourceContext, bufferSource, "in", args.c_str(), NULL, filterGraph) < 0){
         avfilter_inout_free(&inputs);
         avfilter_inout_free(&outputs);
         throw std::runtime_error("Error in inizializing input filters");
@@ -147,7 +145,7 @@ void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceCont
     outputs->pad_idx    = 0;
     outputs->next       = NULL;
 
-    if (avfilter_graph_parse_ptr(filterGraph, reinterpret_cast<const char *>(filtersDesc[0]), &inputs, &outputs, NULL) < 0){
+    if (avfilter_graph_parse_ptr(filterGraph, filtersDesc.c_str(), &inputs, &outputs, NULL) < 0){
         avfilter_inout_free(&inputs);
         avfilter_inout_free(&outputs);
         throw std::runtime_error("Error in inizializing output filters");
@@ -238,15 +236,15 @@ void ScreenRecorder::Configure() {
     avformat_network_init();
     avdevice_register_all();
 
-    if (topRight.first == 0 && topRight.second == 0) {
+    if (crop) {
         /* Viewport is default, fullscreen */
-        ScreenSize::getScreenResolution(width, height);
+        ScreenSize::getScreenResolution(fullWidth, fullHeight);
     } else {
-
+        ScreenSize::getScreenResolution(width, height);
     }
 
     /* Create and configure input format */
-    inputFormatContext = configureInput(nullptr, this->width, this->height, this->bottomLeft);
+    inputFormatContext = configureInput(nullptr, this->fullWidth, this->fullHeight, this->bottomLeft);
     /* Create and configure video and audio decoder */
     decoderContext = configureDecoder(inputFormatContext, videoStreamIndex, AVMEDIA_TYPE_VIDEO);
     //audioDecoderContext = configureDecoder(inputFormatContext, audioStreamIndex, AVMEDIA_TYPE_AUDIO);
@@ -260,7 +258,6 @@ void ScreenRecorder::Configure() {
     encoderContext = configureEncoder(videoStream, AV_CODEC_ID_MPEG4, framerate);
     //audioEncoderContext = configureEncoder(audioStream, AV_CODEC_ID_AAC, framerate);
     /* Configure output setting and write file header */
-    //encoderContext->coded_height = encoderContext->height;
     configureOutput(outputFormatContext, encoderContext, audioEncoderContext, filename);
 
     swsContext = sws_getContext(decoderContext->width, decoderContext->height, decoderContext->pix_fmt,
@@ -268,7 +265,7 @@ void ScreenRecorder::Configure() {
                                 SWS_BICUBIC, NULL, NULL, NULL);
     /* Configure filter crop */
 
-    //configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, "test");
+    configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, "crop=w=800:h=800:x=100:y=100");
 
     /* Clean avformat and pause it */
     av_read_pause(inputFormatContext);
@@ -337,9 +334,9 @@ void ScreenRecorder::Capture() {
             //inputFrame->crop_top = 360;
             //av_frame_apply_cropping(inputFrame, encoderContext->flags & AV_CODEC_FLAG_UNALIGNED ? AV_FRAME_CROP_UNALIGNED : 0);
             /* only if we need to crop the image */
-            //if(crop){
+            if(crop){
                 /* Push the decoded frame into the filtergraph */
-                /*if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
                     if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                         ul.lock();
                         continue;
@@ -351,16 +348,13 @@ void ScreenRecorder::Capture() {
                         continue;
                     } else throw std::runtime_error("Error in filtering.");
                 }
-
-            }*/
-
-            //else
+            }
+            else
                 /* Resize the inputFrame */
-                int p;
-                if(isVideo) p = sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
+                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
             /* Encoded inputFrame */
 
-            if ((ret = avcodec_send_frame(encCtx, outputFrame)) < 0) {
+            if ((ret = avcodec_send_frame(encCtx, filteredFrame)) < 0) {
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                     ul.lock();
                     continue;
