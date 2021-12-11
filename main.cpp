@@ -44,14 +44,14 @@ int main() {
     ScreenRecorder screenRecorder{};
     
     screenRecorder.setOutputFile("../Recordings/output.mp4");
-    screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
+    //screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
     screenRecorder.setFrameRate(15);
     screenRecorder.setViewPortFromCorners1(std::pair<int, int>(100,100), std::pair<int, int>(900,900));
 
     screenRecorder.Start();
     std::cout<<"started"<<std::endl;
     std::this_thread::sleep_for(3s);
-
+/*
     screenRecorder.Pause();
     std::cout<<"paused"<<std::endl;
     std::this_thread::sleep_for(2s);
@@ -59,7 +59,7 @@ int main() {
     screenRecorder.Resume();
     std::cout<<"resumed"<<std::endl;
     std::this_thread::sleep_for(3s);
-
+*/
     screenRecorder.Stop();
     std::cout<<"stopped"<<std::endl;
 

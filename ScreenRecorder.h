@@ -88,7 +88,6 @@ private:
     /* Configure before starting the video */
     void Configure();
     void Capture();
-
     bool audio;
     int width, height;
     bool crop = false;
@@ -155,6 +154,7 @@ public:
         this->bottomLeft = bottomLeft;
         this->topRight = topRight;
         this->crop = true;
+        setResolution(std::get<1>(topRight) - std::get<1>(bottomLeft), std::get<0>(topRight) - std::get<0>(bottomLeft));
     };
     
     /* Set viewport with top left corner and bottom right corner */

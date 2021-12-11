@@ -8,9 +8,16 @@
 
 #include "ScreenRecorder.h"
 
-AVFormatContext *configureInput(AVDictionary *options) {
+AVFormatContext *configureInput(AVDictionary *options, int width, int height, std::pair<int, int> bottomLeft) {
     AVFormatContext *formatContext = avformat_alloc_context();
     formatContext->probesize = 5 * pow(10, 7);
+
+    std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
+    std::string offsetX = std::to_string(std::get<1>(bottomLeft));
+    std::string offsetY = std::to_string(std::get<0>(bottomLeft));
+    av_dict_set(&options,"video_size", videoSize.c_str(), 0);
+    av_dict_set(&options, "offset_x", offsetX.c_str(), 0);
+    av_dict_set(&options, "offset_y", offsetY.c_str(), 0);
 
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
@@ -34,10 +41,10 @@ AVFormatContext *configureInput(AVDictionary *options) {
 #endif
 
     /* Applying frame rate */
-    /*
-    AVDictionary *options = nullptr;
-    av_dict_set(&options, "r", std::to_string(framerate).c_str(), 0);
-    */
+
+    AVDictionary *options2 = nullptr;
+    av_dict_set(&options, "r", std::to_string(15).c_str(), 0);
+
     if (avformat_find_stream_info(formatContext, nullptr) < 0)
         throw std::runtime_error("Unable to find the stream information.");
 
@@ -239,7 +246,7 @@ void ScreenRecorder::Configure() {
     }
 
     /* Create and configure input format */
-    inputFormatContext = configureInput(nullptr);
+    inputFormatContext = configureInput(nullptr, this->width, this->height, this->bottomLeft);
     /* Create and configure video and audio decoder */
     decoderContext = configureDecoder(inputFormatContext, videoStreamIndex, AVMEDIA_TYPE_VIDEO);
     //audioDecoderContext = configureDecoder(inputFormatContext, audioStreamIndex, AVMEDIA_TYPE_AUDIO);
@@ -247,12 +254,12 @@ void ScreenRecorder::Configure() {
     outputFormatContext = configureOutput(filename);
     /* Create and configure video stream */
     videoStream = configureVideoStream(outputFormatContext, width, height, framerate);
+    //outputFormatContext->oformat->write_header
     //audioStream = configureAudioStream(outputFormatContext, framerate);
     /* Create and configure encoder */
     encoderContext = configureEncoder(videoStream, AV_CODEC_ID_MPEG4, framerate);
     //audioEncoderContext = configureEncoder(audioStream, AV_CODEC_ID_AAC, framerate);
     /* Configure output setting and write file header */
-    //encoderContext->height = encoderContext->height - 360;
     //encoderContext->coded_height = encoderContext->height;
     configureOutput(outputFormatContext, encoderContext, audioEncoderContext, filename);
 
@@ -327,8 +334,8 @@ void ScreenRecorder::Capture() {
                     continue;
                 } else throw std::runtime_error("Error in receiving the decoded frame.");
             }
-            inputFrame->crop_top = 360;
-            av_frame_apply_cropping(inputFrame, encoderContext->flags & AV_CODEC_FLAG_UNALIGNED ? AV_FRAME_CROP_UNALIGNED : 0);
+            //inputFrame->crop_top = 360;
+            //av_frame_apply_cropping(inputFrame, encoderContext->flags & AV_CODEC_FLAG_UNALIGNED ? AV_FRAME_CROP_UNALIGNED : 0);
             /* only if we need to crop the image */
             //if(crop){
                 /* Push the decoded frame into the filtergraph */
@@ -349,7 +356,8 @@ void ScreenRecorder::Capture() {
 
             //else
                 /* Resize the inputFrame */
-                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
+                int p;
+                if(isVideo) p = sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
             /* Encoded inputFrame */
 
             if ((ret = avcodec_send_frame(encCtx, outputFrame)) < 0) {
@@ -374,7 +382,7 @@ void ScreenRecorder::Capture() {
 
         ul.lock();
     }
-
+    //outputFormatContext->streams->
     if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
 
     avformat_free_context(outputFormatContext);
