@@ -263,8 +263,8 @@ void ScreenRecorder::Configure() {
     swsContext = sws_getContext(decoderContext->width, decoderContext->height, decoderContext->pix_fmt,
                                 encoderContext->width, encoderContext->height, encoderContext->pix_fmt,
                                 SWS_BICUBIC, NULL, NULL, NULL);
-    /* Configure filter crop */
 
+    /* Configure filter crop */
     configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, "crop=w=800:h=800:x=100:y=100");
 
     /* Clean avformat and pause it */
@@ -336,24 +336,24 @@ void ScreenRecorder::Capture() {
             /* only if we need to crop the image */
             if(crop){
                 /* Push the decoded frame into the filtergraph */
-                if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
-                    if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
-                        ul.lock();
-                        continue;
-                    } else throw std::runtime_error("Error in filtering.");
-                }
-                if ((ret = av_buffersink_get_frame(sinkContext, filteredFrame)) < 0) {
-                    if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
-                        ul.lock();
-                        continue;
-                    } else throw std::runtime_error("Error in filtering.");
-                }
-            }
-            else
-                /* Resize the inputFrame */
-                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
-            /* Encoded inputFrame */
+                if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) throw std::runtime_error("Error in filtering.");
+                /* Pull the filtered frame from the buffersink */
+                if (av_buffersink_get_frame(sinkContext, filteredFrame) < 0) throw std::runtime_error("Error in filtering.");
 
+                sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
+
+                filteredFrame->pts = outputFrame->pts;
+                filteredFrame->format = outputFrame->format;
+                filteredFrame->pict_type = outputFrame->pict_type;
+                //filteredFrame->pkt_dts = outputFrame->pkt_dts;
+            } else {
+
+            }
+
+            /* Resize the inputFrame */
+            // if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, filteredFrame->data, filteredFrame->linesize);
+
+            /* Encoded inputFrame */
             if ((ret = avcodec_send_frame(encCtx, filteredFrame)) < 0) {
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                     ul.lock();
