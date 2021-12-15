@@ -111,13 +111,13 @@ public:
     void Pause();
     void Resume();
     void Stop();
-    
+
     /* ENUMS */
     enum Resolution {
         ORIGINAL,
         HALF
     };
-    
+
     enum ViewPort {
         FULLSCREEN,
         LEFT_HALF,
@@ -125,18 +125,20 @@ public:
         TOP_HALF,
         BOTTOM_HALF
     };
-    
+
     /* SETTERS */
     /* Set output file resolution */
     void setResolution(int width, int height) {
         this->width = width;
         this->height = height;
+        ScreenSize::getScreenResolution(fullWidth, fullHeight);
     }
 
     void setResolution(Resolution resolution) {
         switch (resolution) {
             case ORIGINAL:
                 ScreenSize::getScreenResolution(width, height);
+                ScreenSize::getScreenResolution(fullWidth, fullHeight);
                 break;
             case HALF:
 
@@ -155,38 +157,37 @@ public:
         this->bottomLeft = bottomLeft;
         this->topRight = topRight;
         this->crop = true;
-        setResolution(std::get<1>(topRight) - std::get<1>(bottomLeft), std::get<0>(topRight) - std::get<0>(bottomLeft));
     };
-    
+
     /* Set viewport with top left corner and bottom right corner */
     void setViewPortFromCorners2(std::pair<int, int> topLeft, std::pair<int, int> bottomRight) {
         this->bottomLeft = std::make_pair(topLeft.first, bottomRight.second);
         this->topRight = std::make_pair(bottomRight.first, topLeft.second);
         this->crop = true;
     };
-    
+
     /* Set viewport with bottom left corner dimensions */
     void setViewPort(std::pair<int, int> bottomLeft, int width, int height) {
         this->bottomLeft = bottomLeft;
         this->topRight = std::make_pair(bottomLeft.first + width, bottomLeft.second + height);
         this->crop = true;
     };
-    
+
     /* Set viewport from keyword */
     void setViewPort(ViewPort viewport) {
-        
+
     };
-    
+
     void setOutputFile(std::string filename) {
         this->filename = filename;
     };
-    
+
     void setFrameRate(int framerate) {
 #ifdef _WIN32
         if(framerate > 15) this->framerate = 15;
         else
 #endif
-        this->framerate = framerate;
+            this->framerate = framerate;
     };
 };
 

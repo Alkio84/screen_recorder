@@ -99,7 +99,6 @@ AVCodecContext *configureEncoder(AVStream *stream, AVCodecID id, int framerate) 
 
     if (avcodec_open2(encoderContext, encoder, NULL) < 0)
         throw std::runtime_error("Error in opening the avcodec for " + id);
-
     return encoderContext;
 }
 void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceContext, AVFilterContext *&sinkContext, AVFilterGraph *&filterGraph, const std::string filtersDesc) {
@@ -109,12 +108,12 @@ void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceCont
     AVFilterInOut *outputs = avfilter_inout_alloc();
     filterGraph = avfilter_graph_alloc();
     const std::string args = "video_size=" + std::to_string(decoderContext->width) +
-            "x" + std::to_string(decoderContext->height) +
-            ":pix_fmt=" + std::to_string(decoderContext->pix_fmt) +
-            ":time_base=" + std::to_string(1) +
-            "/" + std::to_string(15) +
-            ":pixel_aspect=" + std::to_string(decoderContext->sample_aspect_ratio.num) +
-            "/" + std::to_string(decoderContext->sample_aspect_ratio.den);
+                             "x" + std::to_string(decoderContext->height) +
+                             ":pix_fmt=" + std::to_string(decoderContext->pix_fmt) +
+                             ":time_base=" + std::to_string(1) +
+                             "/" + std::to_string(15) +
+                             ":pixel_aspect=" + std::to_string(decoderContext->sample_aspect_ratio.num) +
+                             "/" + std::to_string(decoderContext->sample_aspect_ratio.den);
 
 
     if (!outputs || !inputs || !filterGraph) {
@@ -238,9 +237,9 @@ void ScreenRecorder::Configure() {
 
     if (crop) {
         /* Viewport is default, fullscreen */
-        ScreenSize::getScreenResolution(fullWidth, fullHeight);
+        setResolution(std::get<1>(topRight) - std::get<1>(bottomLeft), std::get<0>(topRight) - std::get<0>(bottomLeft));
     } else {
-        ScreenSize::getScreenResolution(width, height);
+        ScreenRecorder::setResolution(Resolution::ORIGINAL);
     }
 
     /* Create and configure input format */
@@ -252,7 +251,6 @@ void ScreenRecorder::Configure() {
     outputFormatContext = configureOutput(filename);
     /* Create and configure video stream */
     videoStream = configureVideoStream(outputFormatContext, width, height, framerate);
-    //outputFormatContext->oformat->write_header
     //audioStream = configureAudioStream(outputFormatContext, framerate);
     /* Create and configure encoder */
     encoderContext = configureEncoder(videoStream, AV_CODEC_ID_MPEG4, framerate);
@@ -285,7 +283,6 @@ void ScreenRecorder::Capture() {
     outputFrame->width = encoderContext->width;
     outputFrame->height = encoderContext->height;
     av_frame_get_buffer(outputFrame, 0);
-
     /*Filters*/
     AVFilterInOut *inputs  = avfilter_inout_alloc();
     AVFilterInOut *outputs = avfilter_inout_alloc();
@@ -331,8 +328,6 @@ void ScreenRecorder::Capture() {
                     continue;
                 } else throw std::runtime_error("Error in receiving the decoded frame.");
             }
-            //inputFrame->crop_top = 360;
-            //av_frame_apply_cropping(inputFrame, encoderContext->flags & AV_CODEC_FLAG_UNALIGNED ? AV_FRAME_CROP_UNALIGNED : 0);
             /* only if we need to crop the image */
             if(crop){
                 /* Push the decoded frame into the filtergraph */
@@ -340,21 +335,18 @@ void ScreenRecorder::Capture() {
                 /* Pull the filtered frame from the buffersink */
                 if (av_buffersink_get_frame(sinkContext, filteredFrame) < 0) throw std::runtime_error("Error in filtering.");
 
-                sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
+                //sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
 
-                filteredFrame->pts = outputFrame->pts;
-                filteredFrame->format = outputFrame->format;
-                filteredFrame->pict_type = outputFrame->pict_type;
                 //filteredFrame->pkt_dts = outputFrame->pkt_dts;
             } else {
-
+                /* Resize the inputFrame */
+                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
             }
 
-            /* Resize the inputFrame */
-            // if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, filteredFrame->data, filteredFrame->linesize);
+
 
             /* Encoded inputFrame */
-            if ((ret = avcodec_send_frame(encCtx, filteredFrame)) < 0) {
+            if ((ret = avcodec_send_frame(encCtx, outputFrame)) < 0) {
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                     ul.lock();
                     continue;
@@ -376,7 +368,6 @@ void ScreenRecorder::Capture() {
 
         ul.lock();
     }
-    //outputFormatContext->streams->
     if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
 
     avformat_free_context(outputFormatContext);

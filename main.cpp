@@ -42,11 +42,11 @@ using namespace std;
 /* driver function to run the application */
 int main() {
     ScreenRecorder screenRecorder{};
-    
+
     screenRecorder.setOutputFile("../Recordings/output.mp4");
     //screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
     screenRecorder.setFrameRate(15);
-    screenRecorder.setViewPortFromCorners1(std::pair<int, int>(100,100), std::pair<int, int>(900,900));
+    //screenRecorder.setViewPortFromCorners1(std::pair<int, int>(100,100), std::pair<int, int>(900,900));
 
     screenRecorder.Start();
     std::cout<<"started"<<std::endl;
