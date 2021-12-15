@@ -43,9 +43,10 @@ using namespace std;
 int main() {
     ScreenRecorder screenRecorder{};
 
-    screenRecorder.setOutputFile("../Recordings/output.mp4");
+    screenRecorder.setOutputFile("../Recordings/output.mp3");
     //screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
     screenRecorder.setFrameRate(15);
+    screenRecorder.recordAudio(true);
     //screenRecorder.setViewPortFromCorners1(std::pair<int, int>(100,100), std::pair<int, int>(900,900));
 
     screenRecorder.Start();

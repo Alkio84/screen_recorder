@@ -7,7 +7,7 @@
 //
 
 #include "ScreenRecorder.h"
-
+#define USE_DSHOW 1
 AVFormatContext *configureInput(AVDictionary *options, int width, int height, std::pair<int, int> bottomLeft) {
     AVFormatContext *formatContext = avformat_alloc_context();
     formatContext->probesize = 5 * pow(10, 7);
@@ -21,10 +21,47 @@ AVFormatContext *configureInput(AVDictionary *options, int width, int height, st
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
 #if USE_DSHOW
-    inputFormat=av_find_input_format("dshow");
-    if(avformat_open_input(&formatContext,"video=screen-capture-recorder",inputFormat,NULL) != 0)
+    inputFormat=av_find_input_format("gdigrab");
+    if(avformat_open_input(&formatContext,"desktop",inputFormat,NULL) != 0)
         throw std::runtime_error("Error in opening input.");
 #else
+
+    inputFormat = av_find_input_format("gdigrab");
+    if(avformat_open_input(&formatContext,"desktop",inputFormat,&options) != 0)
+        throw std::runtime_error("Error in opening input.");
+#endif
+#elif defined linux
+    inputFormat=av_find_input_format("x11grab");
+    if(avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options) != 0)
+        throw std::runtime_error("Error in opening input.");
+#else
+    inputFormat = av_find_input_format("avfoundation");
+    if(avformat_open_input(&formatContext, "1:0", inputFormat, &options) != 0)
+        throw std::runtime_error("Error in opening input.");
+#endif
+
+    /* Applying frame rate */
+    av_dict_set(&options, "r", std::to_string(15).c_str(), 0);
+
+    if (avformat_find_stream_info(formatContext, nullptr) < 0)
+        throw std::runtime_error("Unable to find the stream information.");
+
+    return formatContext;
+}
+AVFormatContext *configureAudioInput(AVDictionary *options) {
+    AVFormatContext *formatContext = avformat_alloc_context();
+
+    AVInputFormat *inputAudioFormat = nullptr;
+    std::string sr = std::to_string(44100);
+    //av_dict_set(&options, "sample_rate",sr.c_str(), 0);
+#ifdef _WIN32
+#if USE_DSHOW
+    inputAudioFormat=av_find_input_format("dshow");
+    if(avformat_open_input(&formatContext,"audio=Microfono (4- HyperX Cloud Flight Wireless)",inputAudioFormat,&options) != 0)
+        throw std::runtime_error("Error in opening audio input.");
+
+#else
+
     inputFormat = av_find_input_format("gdigrab");
     if(avformat_open_input(&formatContext,"desktop",inputFormat,&options) != 0)
         throw std::runtime_error("Error in opening input.");
@@ -42,7 +79,6 @@ AVFormatContext *configureInput(AVDictionary *options, int width, int height, st
     /* Applying frame rate */
 
     AVDictionary *options2 = nullptr;
-    av_dict_set(&options, "r", std::to_string(15).c_str(), 0);
 
     if (avformat_find_stream_info(formatContext, nullptr) < 0)
         throw std::runtime_error("Unable to find the stream information.");
@@ -62,12 +98,13 @@ AVCodecContext *configureDecoder(AVFormatContext *formatContext, int &streamInde
 
     AVCodec *decoder = nullptr;
     streamIndex = av_find_best_stream(formatContext, mediaType, -1, -1, &decoder, 0);
-    if (streamIndex == -1)
-        throw std::runtime_error("Unable to find the video stream index.\nValue is -1.");
+    if (streamIndex < 0)
+        throw std::runtime_error("Unable to find the stream index.\n");
 
     decoder = avcodec_find_decoder(formatContext->streams[streamIndex]->codecpar->codec_id);
     decoderContext = avcodec_alloc_context3(decoder);
     avcodec_parameters_to_context(decoderContext, formatContext->streams[streamIndex]->codecpar);
+    decoderContext->frame_size = 1000;
     if (avcodec_open2(decoderContext, decoder, NULL) < 0)
         throw std::runtime_error("Unable to open the av codec.");
 
@@ -90,10 +127,12 @@ AVCodecContext *configureEncoder(AVStream *stream, AVCodecID id, int framerate) 
     /* Set property of the video file */
     if(id == AV_CODEC_ID_MPEG4) {
         encoderContext->pix_fmt = AV_PIX_FMT_YUV420P;
+        encoderContext->frame_size = 1000;
     } else {
         encoderContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
-        encoderContext->sample_rate = 44100; // 44KHz
+        encoderContext->sample_rate = 44100; // 44.1KHz
         encoderContext->channel_layout = AV_CH_LAYOUT_MONO;
+        encoderContext->frame_size = 1000;
     }
     encoderContext->time_base = {1, framerate};
 
@@ -185,8 +224,8 @@ AVStream *configureAudioStream(AVFormatContext *&formatContext, int framerate) {
     audioStream->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
     audioStream->codecpar->bit_rate = 128 * 1000; // 128 Kb/s
     /* Applying framerate */
-    audioStream->time_base = {1, framerate};
-
+    audioStream->codecpar->sample_rate = 44100; //44.1kHz
+    audioStream->codecpar->frame_size = 1000;
     return audioStream;
 }
 void configureOutput(AVFormatContext *&formatContext, AVCodecContext *&encoderContext, AVCodecContext *&enc, std::string filename) {
@@ -205,8 +244,8 @@ Mark the encoder so that it behaves accordingly. */
         throw std::runtime_error("Output file does not contain any stream video header.");
 
     /* MP4 files require header information */
-    if (avformat_write_header(formatContext, nullptr) < 0)
-        throw std::runtime_error("Error in writing video header.");
+    //if (avformat_write_header(formatContext, nullptr) < 0)
+      //  throw std::runtime_error("Error in writing video header.");
 }
 
 /* Initialize the resources*/
@@ -244,17 +283,18 @@ void ScreenRecorder::Configure() {
 
     /* Create and configure input format */
     inputFormatContext = configureInput(nullptr, this->fullWidth, this->fullHeight, this->bottomLeft);
+    inputAudioFormatContext = configureAudioInput(nullptr);
     /* Create and configure video and audio decoder */
     decoderContext = configureDecoder(inputFormatContext, videoStreamIndex, AVMEDIA_TYPE_VIDEO);
-    //audioDecoderContext = configureDecoder(inputFormatContext, audioStreamIndex, AVMEDIA_TYPE_AUDIO);
+    audioDecoderContext = configureDecoder(inputAudioFormatContext, audioStreamIndex, AVMEDIA_TYPE_AUDIO);
     /* Create and configure output format */
     outputFormatContext = configureOutput(filename);
     /* Create and configure video stream */
     videoStream = configureVideoStream(outputFormatContext, width, height, framerate);
-    //audioStream = configureAudioStream(outputFormatContext, framerate);
+    audioStream = configureAudioStream(outputFormatContext, framerate);
     /* Create and configure encoder */
     encoderContext = configureEncoder(videoStream, AV_CODEC_ID_MPEG4, framerate);
-    //audioEncoderContext = configureEncoder(audioStream, AV_CODEC_ID_AAC, framerate);
+    audioEncoderContext = configureEncoder(audioStream, AV_CODEC_ID_AAC, framerate);
     /* Configure output setting and write file header */
     configureOutput(outputFormatContext, encoderContext, audioEncoderContext, filename);
 
@@ -307,9 +347,9 @@ void ScreenRecorder::Capture() {
             } else throw std::runtime_error("Error in reading packet from input context.");
         }
 
-        bool isVideo = inputPacket->stream_index == videoStreamIndex;
+        bool isVideo = false;//inputPacket->stream_index == videoStreamIndex;
         bool isAudio = inputPacket->stream_index == audioStreamIndex;
-        if (isVideo || isAudio) {
+        if (/*isVideo ||*/ isAudio) {
             decCtx = isVideo ? decoderContext : audioDecoderContext;
             encCtx = isVideo ? encoderContext : audioEncoderContext;
             /* Decode packet */
@@ -329,24 +369,28 @@ void ScreenRecorder::Capture() {
                 } else throw std::runtime_error("Error in receiving the decoded frame.");
             }
             /* only if we need to crop the image */
-            if(crop){
-                /* Push the decoded frame into the filtergraph */
-                if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) throw std::runtime_error("Error in filtering.");
-                /* Pull the filtered frame from the buffersink */
-                if (av_buffersink_get_frame(sinkContext, filteredFrame) < 0) throw std::runtime_error("Error in filtering.");
+            if(isVideo) {
+                if (crop) {
+                    /* Push the decoded frame into the filtergraph */
+                    if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
+                        throw std::runtime_error("Error in filtering.");
+                    /* Pull the filtered frame from the buffersink */
+                    if (av_buffersink_get_frame(sinkContext, filteredFrame) < 0)
+                        throw std::runtime_error("Error in filtering.");
 
-                //sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
+                    //sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
 
-                //filteredFrame->pkt_dts = outputFrame->pkt_dts;
-            } else {
-                /* Resize the inputFrame */
-                if(isVideo) sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height, outputFrame->data, outputFrame->linesize);
+                    //filteredFrame->pkt_dts = outputFrame->pkt_dts;
+                } else {
+                    /* Resize the inputFrame */
+                        sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height,
+                                  outputFrame->data, outputFrame->linesize);
+                }
             }
 
 
-
             /* Encoded inputFrame */
-            if ((ret = avcodec_send_frame(encCtx, outputFrame)) < 0) {
+            if ((ret = avcodec_send_frame(encCtx, inputFrame)) < 0) {
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                     ul.lock();
                     continue;

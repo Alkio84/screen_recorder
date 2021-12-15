@@ -63,6 +63,7 @@ class ScreenRecorder {
 private:
     /* Input and output */
     AVFormatContext *inputFormatContext;
+    AVFormatContext *inputAudioFormatContext;
     AVFormatContext *outputFormatContext;
 
     /* Video */
