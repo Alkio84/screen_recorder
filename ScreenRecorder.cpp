@@ -221,7 +221,7 @@ AVStream *configureAudioStream(AVFormatContext *&formatContext, int framerate) {
     audioStream->codecpar->bit_rate = 128 * 1000; // 128 Kb/s
     /* Applying framerate */
     audioStream->codecpar->sample_rate = 44100; //44.1kHz
-    audioStream->codecpar->frame_size = 1000;
+    //audioStream->codecpar->frame_size = 1000;
     return audioStream;
 }
 void configureOutput(AVFormatContext *&formatContext, AVCodecContext *&encoderContext, AVCodecContext *&encoderAudioContext, int &videoIndex, int &audioIndex, std::string filename) {
@@ -311,7 +311,7 @@ void ScreenRecorder::Configure() {
 
 
 }
-/*
+
 static int add_samples_to_fifo(AVAudioFifo *fifo,
                                uint8_t **converted_input_samples,
                                const int frame_size){
@@ -375,7 +375,7 @@ void ScreenRecorder::CaptureAudio() {
         fprintf(stderr, "Could not allocate FIFO\n");
         //return AVERROR(ENOMEM);
     }
-
+    std::unique_lock write(m);
     std::unique_lock ul(m);
 
     int ret;
@@ -466,8 +466,12 @@ void ScreenRecorder::CaptureAudio() {
                 throw std::runtime_error("Error in receiving the decoded audio packet.");
             av_packet_rescale_ts(outputPacket, audioEncoderContext->time_base, outputFormatContext->streams[outAudioStreamIndex]->time_base);
             outputPacket->stream_index = outAudioStreamIndex;
+
+            write.lock();
             if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
                 throw std::runtime_error("Error in writing packet to output file.");
+            write.unlock();
+
             av_packet_unref(outputPacket);
             }
             ret = 0;
@@ -476,361 +480,12 @@ void ScreenRecorder::CaptureAudio() {
     }
 
     //DA RIMUOVERE
-    if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
-    avformat_free_context(outputFormatContext);
+    //if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
+    //avformat_free_context(outputFormatContext);
 
-}*/
-int init_fifo(AVAudioFifo *fifo, AVCodecContext* audioEncoderContext)
-{
-    /* Create the FIFO buffer based on the specified output sample format. */
-    if (!(fifo = av_audio_fifo_alloc(audioEncoderContext->sample_fmt,
-                                     audioEncoderContext->channels, 1))) {
-        fprintf(stderr, "Could not allocate FIFO\n");
-        return AVERROR(ENOMEM);
-    }
-    return 0;
 }
 
-int add_samples_to_fifo(AVAudioFifo *fifo, uint8_t** converted_input_samples, const int frame_size) {
-    int error;
-    /* Make the FIFO as large as it needs to be to hold both,
-     * the old and the new samples. */
-    if ((error = av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + frame_size)) < 0) {
-        fprintf(stderr, "Could not reallocate FIFO\n");
-        return error;
-    }
-    /* Store the new samples in the FIFO buffer. */
-    if (av_audio_fifo_write(fifo, (void**)converted_input_samples, frame_size) < frame_size) {
-        fprintf(stderr, "Could not write data to FIFO\n");
-        return AVERROR_EXIT;
-    }
-    return 0;
-}
-
-int initConvertedSamples(uint8_t*** converted_input_samples,
-                                         AVCodecContext* output_codec_context,
-                                         int frame_size) {
-    int error;
-    /* Allocate as many pointers as there are audio channels.
-     * Each pointer will later point to the audio samples of the corresponding
-     * channels (although it may be NULL for interleaved formats).
-     */
-    if (!(*converted_input_samples = (uint8_t**)calloc(output_codec_context->channels,
-                                                       sizeof(**converted_input_samples)))) {
-        fprintf(stderr, "Could not allocate converted input sample pointers\n");
-        return AVERROR(ENOMEM);
-    }
-    /* Allocate memory for the samples of all channels in one consecutive
-     * block for convenience. */
-    if (av_samples_alloc(*converted_input_samples, nullptr,
-                         output_codec_context->channels,
-                         frame_size,
-                         output_codec_context->sample_fmt, 0) < 0) {
-
-        exit(1);
-    }
-    return 0;
-}
-using namespace  std;
-static int64_t pts = 0;
-void ScreenRecorder::CaptureAudio() {
-    int ret;
-    unique_lock write(n);
-    write.unlock();
-    AVAudioFifo *fifo = nullptr;
-    AVPacket* inPacket, * outPacket;
-    AVFrame* rawFrame, * scaledFrame;
-    uint8_t** resampledData;
-    unique_lock ul(m);
-    fifo = av_audio_fifo_alloc(audioDecoderContext->sample_fmt,
-                        audioDecoderContext->channels, 1);
-
-    //allocate space for a packet
-    inPacket = av_packet_alloc();
-    if (!inPacket) {
-        cerr << "Cannot allocate an AVPacket for encoded video" << endl;
-        exit(1);
-    }
-
-    //allocate space for a packet
-    rawFrame = av_frame_alloc();
-    if (!rawFrame) {
-        cerr << "Cannot allocate an AVPacket for encoded video" << endl;
-        exit(1);
-    }
-
-    scaledFrame = av_frame_alloc();
-    if (!scaledFrame) {
-        cerr << "Cannot allocate an AVPacket for encoded video" << endl;
-        exit(1);
-    }
-
-    outPacket = av_packet_alloc();
-    if (!outPacket) {
-        cerr << "Cannot allocate an AVPacket for encoded video" << endl;
-        exit(1);
-    }
-
-    //init the resampler
-    SwrContext* resampleContext = nullptr;
-    resampleContext = swr_alloc_set_opts(resampleContext,
-                                         av_get_default_channel_layout(audioEncoderContext->channels),
-                                         audioEncoderContext->sample_fmt,
-                                         audioEncoderContext->sample_rate,
-                                         av_get_default_channel_layout(audioDecoderContext->channels),
-                                         audioDecoderContext->sample_fmt,
-                                         audioDecoderContext->sample_rate,
-                                         0,
-                                         nullptr);
-    if (!resampleContext) {
-        cerr << "Cannot allocate the resample context" << endl;
-        exit(1);
-    }
-    if ((swr_init(resampleContext)) < 0) {
-        fprintf(stderr, "Could not open resample context\n");
-        swr_free(&resampleContext);
-        exit(1);
-    }
-
-    while (true) {
-        if (!capture) {
-            cout << "Pause audio" << endl;
-        }
-        cv.wait(ul, [this]() { return capture; });
-
-        if (end) {
-            break;
-        }
-
-        ul.unlock();
-
-        if (av_read_frame(inputAudioFormatContext, inPacket) >= 0 && inPacket->stream_index == inAudioStreamIndex) {
-            //decode audio routing
-            av_packet_rescale_ts(outPacket, inputAudioFormatContext->streams[inAudioStreamIndex]->time_base, audioDecoderContext->time_base);
-            if ((ret = avcodec_send_packet(audioDecoderContext, inPacket)) < 0) {
-                cout << "Cannot decode current audio packet " << ret << endl;
-                continue;
-            }
-
-            while (ret >= 0) {
-                ret = avcodec_receive_frame(audioDecoderContext, rawFrame);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                    break;
-                else if (ret < 0) {
-                    cerr << "Error during decoding" << endl;
-                    exit(1);
-                }
-                if (outputFormatContext->streams[outAudioStreamIndex]->start_time <= 0) {
-                    outputFormatContext->streams[outAudioStreamIndex]->start_time = rawFrame->pts;
-                }
-                initConvertedSamples(&resampledData, audioEncoderContext, rawFrame->nb_samples);
-
-                swr_convert(resampleContext,
-                            resampledData, rawFrame->nb_samples,
-                            (const uint8_t**)rawFrame->extended_data, rawFrame->nb_samples);
-
-                add_samples_to_fifo(fifo, resampledData, rawFrame->nb_samples);
-
-                //raw frame ready
-                outPacket->data = nullptr;
-                outPacket->size = 0;
-
-                const int frame_size = FFMAX(av_audio_fifo_size(fifo), audioEncoderContext->frame_size);
-
-                scaledFrame = av_frame_alloc();
-                if (!scaledFrame) {
-                    cerr << "Cannot allocate an AVPacket for encoded video" << endl;
-                    exit(1);
-                }
-
-                scaledFrame->nb_samples = audioEncoderContext->frame_size;
-                scaledFrame->channel_layout = audioEncoderContext->channel_layout;
-                scaledFrame->format = audioEncoderContext->sample_fmt;
-                scaledFrame->sample_rate = audioEncoderContext->sample_rate;
-                av_frame_get_buffer(scaledFrame, 0);
-
-                while (av_audio_fifo_size(fifo) >= audioEncoderContext->frame_size) {
-
-                    ret = av_audio_fifo_read(fifo, (void**)(scaledFrame->data), audioEncoderContext->frame_size);
-                    scaledFrame->pts = pts;
-                    pts += scaledFrame->nb_samples;
-                    if (avcodec_send_frame(audioEncoderContext, scaledFrame) < 0) {
-                        cout << "Cannot encode current audio packet " << endl;
-                        exit(1);
-                    }
-                    while (ret >= 0) {
-                        ret = avcodec_receive_packet(audioEncoderContext, outPacket);
-                        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                            break;
-                        else if (ret < 0) {
-                            cerr << "Error during encoding" << endl;
-                            exit(1);
-                        }
-                        av_packet_rescale_ts(outPacket, audioEncoderContext->time_base, outputFormatContext->streams[outAudioStreamIndex]->time_base);
-
-                        outPacket->stream_index = outAudioStreamIndex;
-
-                        write.lock();
-
-                        if (av_interleaved_write_frame(outputFormatContext, outPacket) != 0)
-                        {
-                            cerr << "Error in writing audio frame" << endl;
-                        }
-                        write.unlock();
-                        av_packet_unref(outPacket);
-                    }
-                    ret = 0;
-                }
-                av_frame_free(&scaledFrame);
-                av_packet_unref(outPacket);
-            }
-        }
-    }
-    int x = 7;
-}
-int ScreenRecorder::Capture() {
-    int64_t pts = 0;
-    int flag;
-    int frameFinished = 0;
-    bool endPause = false;
-    int numPause = 0;
-    unique_lock ul(m);
-    ofstream outFile{ "..\\media\\log.txt", ios::out };
-    unique_lock write(n);
-    write.unlock();
-    int frameIndex = 0;
-    int value = 0;
-    AVPacket* pAVPacket;
-    pAVPacket = (AVPacket*)av_malloc(sizeof(AVPacket));
-    if (pAVPacket == nullptr) {
-        cerr << "Error in allocating AVPacket" << endl;
-        exit(-1);
-    }
-
-    AVFrame* pAVFrame = av_frame_alloc();
-    if (pAVFrame == nullptr) {
-        cerr << "Error: unable to alloc the AVFrame resources" << endl;
-        exit(-1);
-    }
-
-    AVFrame* outFrame = av_frame_alloc();
-    if (outFrame == nullptr) {
-        cerr << "Error: unable to alloc the AVFrame resources for out frame" << endl;
-        exit(-1);
-    }
-
-
-    int videoOutBuffSize;
-    int nBytes = av_image_get_buffer_size(encoderContext->pix_fmt, encoderContext->width, encoderContext->height, 32);
-    uint8_t* videoOutBuff = (uint8_t*)av_malloc(nBytes);
-
-    if (videoOutBuff == nullptr) {
-        cerr << "Error: unable to allocate memory" << endl;
-        exit(-1);
-    }
-
-    value = av_image_fill_arrays(outFrame->data, outFrame->linesize, videoOutBuff, AV_PIX_FMT_YUV420P, encoderContext->width, encoderContext->height, 1);
-    if (value < 0) {
-        cerr << "Error in filling image array" << endl;
-    }
-
-    SwsContext* swsCtx_;
-    swsCtx_ = sws_getContext(decoderContext->width, decoderContext->height, decoderContext->pix_fmt,
-                             encoderContext->width, encoderContext->height, encoderContext->pix_fmt,
-                             SWS_BICUBIC, NULL, NULL, NULL);
-
-    AVPacket outPacket;
-    int gotPicture;
-
-    time_t startTime;
-    time(&startTime);
-
-    while (true) {
-
-        if (!capture) {
-            cout << "Pause" << endl;
-            outFile << "///////////////////   Pause  ///////////////////" << endl;
-            cout << "encoderContext->time_base: " << encoderContext->time_base.num << ", " << encoderContext->time_base.den << endl;
-        }
-        cv.wait(ul, [this]() { return capture; });   //pause capture (not busy waiting)
-        if (endPause) {
-            endPause = false;
-        }
-
-        if (end)  //check if the capture has to stop
-            break;
-        ul.unlock();
-
-        if (av_read_frame(inputFormatContext, pAVPacket) >= 0 && pAVPacket->stream_index == inVideoStreamIndex) {
-            av_packet_rescale_ts(pAVPacket, inputFormatContext->streams[inVideoStreamIndex]->time_base, decoderContext->time_base);
-            value = avcodec_decode_video2(decoderContext, pAVFrame, &frameFinished, pAVPacket);
-            if (value < 0) {
-                cout << "Unable to decode video" << endl;
-            }
-
-            if (frameFinished) { //frame successfully decoded
-                //sws_scale(swsCtx_, pAVFrame->data, pAVFrame->linesize, 0, pAVCodecContext->height, outFrame->data, outFrame->linesize);
-                av_init_packet(&outPacket);
-                outPacket.data = nullptr;
-                outPacket.size = 0;
-
-                if (outAVFormatContext->streams[outVideoStreamIndex]->start_time <= 0) {
-                    outAVFormatContext->streams[outVideoStreamIndex]->start_time = pAVFrame->pts;
-                }
-
-                //disable warning on the console
-                outFrame->width = encoderContext->width;
-                outFrame->height = encoderContext->height;
-                outFrame->format = encoderContext->pix_fmt;
-
-                sws_scale(swsCtx_, pAVFrame->data, pAVFrame->linesize, 0, encoderContext->height, outFrame->data, outFrame->linesize);
-
-                avcodec_encode_video2(encoderContext, &outPacket, outFrame, &gotPicture);
-
-                if (gotPicture) {
-                    if (outPacket.pts != AV_NOPTS_VALUE) {
-                        outPacket.pts = av_rescale_q(outPacket.pts, videoStream->codec->time_base, videoStream->time_base);
-                    }
-                    if (outPacket.dts != AV_NOPTS_VALUE) {
-                        outPacket.dts = av_rescale_q(outPacket.dts, videoStream->codec->time_base, videoStream->time_base);
-                    }
-
-                    //cout << "Write frame " << j++ << " (size = " << outPacket.size / 1000 << ")" << endl;
-                    //cout << "(size = " << outPacket.size << ")" << endl;
-
-                    //av_packet_rescale_ts(&outPacket, encoderContext->time_base, outAVFormatContext->streams[outVideoStreamIndex]->time_base);
-                    //outPacket.stream_index = outVideoStreamIndex;
-
-                    outFile << "outPacket->duration: " << outPacket.duration << ", " << "pAVPacket->duration: " << pAVPacket->duration << endl;
-                    outFile << "outPacket->pts: " << outPacket.pts << ", " << "pAVPacket->pts: " << pAVPacket->pts << endl;
-                    outFile << "outPacket.dts: " << outPacket.dts << ", " << "pAVPacket->dts: " << pAVPacket->dts << endl;
-
-                    time_t timer;
-                    double seconds;
-
-                    ul.lock();
-
-                    write.lock();
-                    if (av_write_frame(outAVFormatContext, &outPacket) != 0) {
-                        cerr << "Error in writing video frame" << endl;
-                    }
-                    write.unlock();
-                    av_packet_unref(&outPacket);
-                }
-
-                av_packet_unref(&outPacket);
-                av_free_packet(pAVPacket);  //avoid memory saturation
-            }
-        }
-    }
-
-    outFile.close();
-
-    av_free(videoOutBuff);
-
-    return 0;
-}
-/*void ScreenRecorder::Capture() {
+void ScreenRecorder::Capture() {
     AVPacket *inputPacket = av_packet_alloc();
     AVPacket *outputPacket = av_packet_alloc();
     AVFrame *inputFrame = av_frame_alloc();
@@ -840,7 +495,7 @@ int ScreenRecorder::Capture() {
     outputFrame->height = encoderContext->height;
     av_frame_get_buffer(outputFrame, 0);
 
-    unique_lock write(n);
+    std::unique_lock write(n);
     write.unlock();
 #ifdef macos
     //Filters
@@ -933,13 +588,13 @@ int ScreenRecorder::Capture() {
         audioRecorder.join();
     if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
     avformat_free_context(outputFormatContext);
-}*/
+}
 
 void ScreenRecorder::Start() {
     ScreenRecorder::Configure();
 
     recorder = std::thread(&ScreenRecorder::Capture, this);
-    audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
+    //audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
 }
 
 void ScreenRecorder::Pause() {

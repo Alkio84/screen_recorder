@@ -43,7 +43,7 @@ using namespace std;
 int main() {
     ScreenRecorder screenRecorder{};
 
-    screenRecorder.setOutputFile("../Recordings/output.mp3");
+    screenRecorder.setOutputFile("../Recordings/output.mp4");
     //screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
     screenRecorder.setFrameRate(15);
     screenRecorder.recordAudio(true);
