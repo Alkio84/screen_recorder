@@ -21,8 +21,8 @@ class ScreenSize {
 public:
     static void getScreenResolution(int& width, int& height) {
 #if WIN32
-        width = (int)GetSystemMetrics(SM_CXSCREEN);
-        height = (int)GetSystemMetrics(SM_CYSCREEN);
+        /*width = (int)GetSystemMetrics(SM_CXSCREEN);
+        height = (int)GetSystemMetrics(SM_CYSCREEN);*/
         width = (int)GetSystemMetrics(SM_CXVIRTUALSCREEN);
         height = (int)GetSystemMetrics(SM_CYVIRTUALSCREEN);
 

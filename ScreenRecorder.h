@@ -52,10 +52,11 @@ extern "C" {
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/file.h"
-
+#include "libavutil/audio_fifo.h"
 // lib swresample
 
 #include "libswscale/swscale.h"
+#include "libswresample/swresample.h"
 
 }
 
@@ -63,37 +64,52 @@ class ScreenRecorder {
 private:
     /* Input and output */
     AVFormatContext *inputFormatContext;
+    AVFormatContext *inputAudioFormatContext;
     AVFormatContext *outputFormatContext;
 
     /* Video */
     AVCodecContext *decoderContext;
     AVCodecContext *encoderContext;
     AVStream *videoStream;
-    int videoStreamIndex;
+    int inVideoStreamIndex;
+    int outVideoStreamIndex;
 
     /* Audio */
     AVCodecContext *audioDecoderContext;
     AVCodecContext *audioEncoderContext;
     AVStream *audioStream;
-    int audioStreamIndex;
+    int inAudioStreamIndex;
+    int outAudioStreamIndex;
 
     /* Converter */
     SwsContext *swsContext;
 
+    /*Filter*/
+    AVFilterContext *sourceContext;
+    AVFilterContext *sinkContext;
+    AVFilterGraph *filterGraph;
+
     /* Configure before starting the video */
     void Configure();
     void Capture();
-
+    void CaptureAudio();
     bool audio;
+    int fullWidth, fullHeight;
     int width, height;
+    bool crop;
     std::pair<int, int> bottomLeft, topRight;
     std::string filename;
     int framerate;
 
     /*Thread Management*/
     std::thread recorder;
+    std::thread audioRecorder;
     bool capture = true;
     bool end = false;
+    //write
+    std::mutex n;
+    std::condition_variable cvWrite;
+    //pause-stop
     std::mutex m;
     std::condition_variable cv;
 public:
@@ -101,17 +117,39 @@ public:
     ~ScreenRecorder();
 
     /* MANAGE FLOW */
-    void Start();
-    void Pause();
-    void Resume();
-    void Stop();
-    
+    void Start() {
+        ScreenRecorder::Configure();
+
+        recorder = std::thread(&ScreenRecorder::Capture, this);
+        //audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
+    }
+
+    void Pause() {
+        std::unique_lock ul(m);
+        av_read_pause(inputFormatContext);
+        capture = false;
+    }
+
+    void Resume() {
+        av_read_play(inputFormatContext);
+        std::unique_lock ul(m);
+        capture = true;
+        cv.notify_all();
+    }
+
+    void Stop() {
+        std::unique_lock ul(m);
+        end = true;
+        cv.notify_all();
+
+    }
+
     /* ENUMS */
     enum Resolution {
         ORIGINAL,
         HALF
     };
-    
+
     enum ViewPort {
         FULLSCREEN,
         LEFT_HALF,
@@ -119,18 +157,20 @@ public:
         TOP_HALF,
         BOTTOM_HALF
     };
-    
+
     /* SETTERS */
     /* Set output file resolution */
     void setResolution(int width, int height) {
         this->width = width;
         this->height = height;
+        ScreenSize::getScreenResolution(fullWidth, fullHeight);
     }
 
     void setResolution(Resolution resolution) {
         switch (resolution) {
             case ORIGINAL:
                 ScreenSize::getScreenResolution(width, height);
+                ScreenSize::getScreenResolution(fullWidth, fullHeight);
                 break;
             case HALF:
 
@@ -148,31 +188,38 @@ public:
     void setViewPortFromCorners1(std::pair<int, int> bottomLeft, std::pair<int, int> topRight) {
         this->bottomLeft = bottomLeft;
         this->topRight = topRight;
+        this->crop = true;
     };
-    
+
     /* Set viewport with top left corner and bottom right corner */
     void setViewPortFromCorners2(std::pair<int, int> topLeft, std::pair<int, int> bottomRight) {
         this->bottomLeft = std::make_pair(topLeft.first, bottomRight.second);
         this->topRight = std::make_pair(bottomRight.first, topLeft.second);
+        this->crop = true;
     };
-    
+
     /* Set viewport with bottom left corner dimensions */
     void setViewPort(std::pair<int, int> bottomLeft, int width, int height) {
         this->bottomLeft = bottomLeft;
         this->topRight = std::make_pair(bottomLeft.first + width, bottomLeft.second + height);
+        this->crop = true;
     };
-    
+
     /* Set viewport from keyword */
     void setViewPort(ViewPort viewport) {
-        
+
     };
-    
+
     void setOutputFile(std::string filename) {
         this->filename = filename;
     };
-    
+
     void setFrameRate(int framerate) {
-        this->framerate = framerate;
+#ifdef _WIN32
+        if(framerate > 15) this->framerate = 15;
+        else
+#endif
+            this->framerate = framerate;
     };
 };
 

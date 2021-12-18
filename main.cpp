@@ -34,11 +34,6 @@ extern "C"
 //'0' Use GDIgrab
 #define USE_DSHOW 0
 
-//Refresh Event
-#define SFM_REFRESH_EVENT  (SDL_USEREVENT + 1)
-
-#define SFM_BREAK_EVENT  (SDL_USEREVENT + 2)
-
 using namespace std;
 
 #include "ScreenRecorder.h"
@@ -47,23 +42,25 @@ using namespace std;
 /* driver function to run the application */
 int main() {
     ScreenRecorder screenRecorder{};
-    
+
     screenRecorder.setOutputFile("../Recordings/output.mp4");
-    screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
-    screenRecorder.setFrameRate(30);
+    //screenRecorder.setResolution(ScreenRecorder::ORIGINAL);
+    screenRecorder.setFrameRate(15);
+    screenRecorder.recordAudio(true);
+    //screenRecorder.setViewPortFromCorners1(std::pair<int, int>(100,100), std::pair<int, int>(900,900));
 
     screenRecorder.Start();
     std::cout<<"started"<<std::endl;
     std::this_thread::sleep_for(3s);
-
+/*
     screenRecorder.Pause();
     std::cout<<"paused"<<std::endl;
-    std::this_thread::sleep_for(5s);
+    std::this_thread::sleep_for(2s);
 
     screenRecorder.Resume();
     std::cout<<"resumed"<<std::endl;
     std::this_thread::sleep_for(3s);
-
+*/
     screenRecorder.Stop();
     std::cout<<"stopped"<<std::endl;
 
