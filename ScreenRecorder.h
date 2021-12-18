@@ -117,10 +117,32 @@ public:
     ~ScreenRecorder();
 
     /* MANAGE FLOW */
-    void Start();
-    void Pause();
-    void Resume();
-    void Stop();
+    void Start() {
+        ScreenRecorder::Configure();
+
+        recorder = std::thread(&ScreenRecorder::Capture, this);
+        //audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
+    }
+
+    void Pause() {
+        std::unique_lock ul(m);
+        av_read_pause(inputFormatContext);
+        capture = false;
+    }
+
+    void Resume() {
+        av_read_play(inputFormatContext);
+        std::unique_lock ul(m);
+        capture = true;
+        cv.notify_all();
+    }
+
+    void Stop() {
+        std::unique_lock ul(m);
+        end = true;
+        cv.notify_all();
+
+    }
 
     /* ENUMS */
     enum Resolution {

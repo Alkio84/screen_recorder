@@ -590,29 +590,3 @@ void ScreenRecorder::Capture() {
     avformat_free_context(outputFormatContext);
 }
 
-void ScreenRecorder::Start() {
-    ScreenRecorder::Configure();
-
-    recorder = std::thread(&ScreenRecorder::Capture, this);
-    //audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
-}
-
-void ScreenRecorder::Pause() {
-    std::unique_lock ul(m);
-    av_read_pause(inputFormatContext);
-    capture = false;
-}
-
-void ScreenRecorder::Resume() {
-    av_read_play(inputFormatContext);
-    std::unique_lock ul(m);
-    capture = true;
-    cv.notify_all();
-}
-
-void ScreenRecorder::Stop() {
-    std::unique_lock ul(m);
-    end = true;
-    cv.notify_all();
-
-}
