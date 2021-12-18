@@ -296,7 +296,7 @@ void ScreenRecorder::Configure() {
                                 SWS_BICUBIC, NULL, NULL, NULL);
 
     /* Configure filter crop */
-#ifdef macos
+#ifdef __APPLE__
     configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, "crop=w=800:h=800:x=100:y=100");
 #endif
     /* Clean avformat and pause it */
@@ -357,7 +357,8 @@ void ScreenRecorder::CaptureAudio() {
         fprintf(stderr, "Could not allocate FIFO\n");
         //return AVERROR(ENOMEM);
     }
-    std::unique_lock write(m);
+    std::unique_lock write(n);
+    write.unlock();
     std::unique_lock ul(m);
 
     int ret;
@@ -425,6 +426,7 @@ void ScreenRecorder::CaptureAudio() {
             ret = av_audio_fifo_read(fifo, (void**)(outputFrame->data), audioEncoderContext->frame_size);
             x = av_audio_fifo_size(fifo);
             outputFrame->pts = pts;
+            outputFrame->pkt_dts = pts;
             pts += outputFrame->nb_samples;
             // Encoded inputFrame
             if ((avcodec_send_frame(audioEncoderContext, outputFrame)) < 0) {
@@ -438,10 +440,6 @@ void ScreenRecorder::CaptureAudio() {
                 if ((ret = avcodec_receive_packet(audioEncoderContext, outputPacket)) >= 0) {
                     outputPacket->stream_index = outAudioStreamIndex;
 
-                    if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
-                        throw std::runtime_error("Error in writing packet to output file.");
-
-                    av_packet_unref(outputPacket);
                 } else if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                     break;
                 else
@@ -460,10 +458,6 @@ void ScreenRecorder::CaptureAudio() {
         }
         ul.lock();
     }
-
-    //DA RIMUOVERE
-    //if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
-    //avformat_free_context(outputFormatContext);
 
 }
 
@@ -563,9 +557,8 @@ void ScreenRecorder::Capture() {
         ul.lock();
     }
     //wait for audio to end before closing the file
-    if(audio && audioRecorder.joinable())
-        audioRecorder.join();
-    if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
-    avformat_free_context(outputFormatContext);
+    /*if(audio && audioRecorder.joinable())
+        audioRecorder.join();*/
+
 }
 

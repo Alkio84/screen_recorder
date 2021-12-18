@@ -121,7 +121,7 @@ public:
         ScreenRecorder::Configure();
 
         recorder = std::thread(&ScreenRecorder::Capture, this);
-        //audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
+        audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
     }
 
     void Pause() {
@@ -141,6 +141,12 @@ public:
         std::unique_lock ul(m);
         end = true;
         cv.notify_all();
+        ul.unlock();
+        audioRecorder.join();
+        recorder.join();
+
+        if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
+        avformat_free_context(outputFormatContext);
 
     }
 
