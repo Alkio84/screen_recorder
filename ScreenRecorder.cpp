@@ -7,6 +7,7 @@
 //
 
 #include "ScreenRecorder.h"
+
 AVFormatContext *configureInput(AVDictionary *options, int width, int height, std::pair<int, int> bottomLeft) {
     AVFormatContext *formatContext = avformat_alloc_context();
     formatContext->probesize = 5 * pow(10, 7);
@@ -19,24 +20,21 @@ AVFormatContext *configureInput(AVDictionary *options, int width, int height, st
     av_dict_set(&options, "offset_y", offsetY.c_str(), 0);*/
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
-
     inputFormat = av_find_input_format("gdigrab");
     if(avformat_open_input(&formatContext,"desktop",inputFormat,&options) != 0)
         throw std::runtime_error("Error in opening input.");
-
 #elif defined linux
     inputFormat=av_find_input_format("x11grab");
     if(avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options) != 0)
         throw std::runtime_error("Error in opening input.");
-#else
+#elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");
-    if(avformat_open_input(&formatContext, "1:0", inputFormat, &options) != 0)
+    if(avformat_open_input(&formatContext, "1:", inputFormat, &options) != 0)
         throw std::runtime_error("Error in opening input.");
 #endif
 
     /* Applying frame rate */
     av_dict_set(&options, "r", std::to_string(15).c_str(), 0);
-
     if (avformat_find_stream_info(formatContext, nullptr) < 0)
         throw std::runtime_error("Unable to find the stream information.");
 
@@ -49,23 +47,19 @@ AVFormatContext *configureAudioInput(AVDictionary *options) {
     std::string sr = std::to_string(44100);
     //av_dict_set(&options, "sample_rate",sr.c_str(), 0);
 #ifdef _WIN32
-
     inputAudioFormat=av_find_input_format("dshow");
     if(avformat_open_input(&formatContext,"audio=Microfono (4- HyperX Cloud Flight Wireless)",inputAudioFormat,&options) != 0)
         throw std::runtime_error("Error in opening audio input.");
-
 #elif defined linux
     inputAudioFormat=av_find_input_format("x11grab");
     if(avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options) != 0)
         throw std::runtime_error("Error in opening input.");
-#else
+#elif __APPLE__
     inputAudioFormat = av_find_input_format("avfoundation");
-    if(avformat_open_input(&formatContext, "1:0", inputFormat, &options) != 0)
+    if(avformat_open_input(&formatContext, ":0", inputAudioFormat, &options) != 0)
         throw std::runtime_error("Error in opening input.");
 #endif
-
     /* Applying frame rate */
-
     AVDictionary *options2 = nullptr;
 
     if (avformat_find_stream_info(formatContext, nullptr) < 0)
@@ -312,24 +306,12 @@ void ScreenRecorder::Configure() {
 
 }
 
-static int add_samples_to_fifo(AVAudioFifo *fifo,
-                               uint8_t **converted_input_samples,
-                               const int frame_size){
-    int error;
+static void add_samples_to_fifo(AVAudioFifo *fifo, uint8_t **converted_input_samples, const int frame_size) {
+    if (av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + frame_size) < 0)
+        throw std::runtime_error("Could not reallocate FIFO.");
 
-    // Make the FIFO as large as it needs to be to hold both,
-     // the old and the new samples.
-    if ((error = av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + frame_size)) < 0) {
-        fprintf(stderr, "Could not reallocate FIFO\n");
-        return error;
-    }
-    // Store the new samples in the FIFO buffer.
-    if (av_audio_fifo_write(fifo, (void **)converted_input_samples,
-                            frame_size) < frame_size) {
-        fprintf(stderr, "Could not write data to FIFO\n");
-        return AVERROR_EXIT;
-    }
-    return 0;
+    if (av_audio_fifo_write(fifo, (void **)converted_input_samples, frame_size) < frame_size)
+        throw std::runtime_error("Could not write data to FIFO.");
 }
 
 void ScreenRecorder::CaptureAudio() {
@@ -349,13 +331,13 @@ void ScreenRecorder::CaptureAudio() {
     uint8_t*** resampledData;
     SwrContext *resampleContext = nullptr;
     resampleContext = swr_alloc_set_opts(resampleContext,
-                                           av_get_default_channel_layout(audioDecoderContext->channels),
-                                          audioDecoderContext->sample_fmt,
-                                          audioDecoderContext->sample_rate,
-                                           av_get_default_channel_layout(audioEncoderContext->channels),
-                                          audioEncoderContext->sample_fmt,
-                                          audioEncoderContext->sample_rate,
-                                           0, nullptr);
+                                         av_get_default_channel_layout(audioDecoderContext->channels),
+                                         audioDecoderContext->sample_fmt,
+                                         audioDecoderContext->sample_rate,
+                                         av_get_default_channel_layout(audioEncoderContext->channels),
+                                         audioEncoderContext->sample_fmt,
+                                         audioEncoderContext->sample_rate,
+                                         0, nullptr);
     if (!resampleContext) {
         fprintf(stderr, "Could not allocate resample context\n");
         //return AVERROR(ENOMEM);
@@ -371,7 +353,7 @@ void ScreenRecorder::CaptureAudio() {
     AVAudioFifo *fifo = nullptr;
 
     if (!(fifo = av_audio_fifo_alloc(audioDecoderContext->sample_fmt,
-                                      audioDecoderContext->channels, 1))) {
+                                     audioDecoderContext->channels, 1))) {
         fprintf(stderr, "Could not allocate FIFO\n");
         //return AVERROR(ENOMEM);
     }
@@ -393,39 +375,39 @@ void ScreenRecorder::CaptureAudio() {
             } else throw std::runtime_error("Error in reading packet from input context.");
         }
         av_packet_rescale_ts(outputPacket, inputAudioFormatContext->streams[inAudioStreamIndex]->time_base, audioDecoderContext->time_base);
-            // Decode packet
-            if ((ret = avcodec_send_packet(audioDecoderContext, inputPacket)) < 0) {
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
-                    ul.lock();
-                    continue;
-                } else throw std::runtime_error("Error in decoding the packet.");
-            }
+        // Decode packet
+        if ((ret = avcodec_send_packet(audioDecoderContext, inputPacket)) < 0) {
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
+                ul.lock();
+                continue;
+            } else throw std::runtime_error("Error in decoding the packet.");
+        }
 
-            // Get decoded inputFrame
+        // Get decoded inputFrame
 
-            if ((ret = avcodec_receive_frame(audioDecoderContext, inputFrame)) < 0) {
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
-                    ul.lock();
-                    continue;
-                } else throw std::runtime_error("Error in receiving the decoded frame.");
-            }
+        if ((ret = avcodec_receive_frame(audioDecoderContext, inputFrame)) < 0) {
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
+                ul.lock();
+                continue;
+            } else throw std::runtime_error("Error in receiving the decoded frame.");
+        }
         if (outputFormatContext->streams[outAudioStreamIndex]->start_time <= 0) {
             outputFormatContext->streams[outAudioStreamIndex]->start_time = inputFrame->pts;
         }
-            //init converted samples
+        //init converted samples
         if (!(*resampledData = (uint8_t**)calloc(audioEncoderContext->channels, sizeof(**resampledData)))) {
             fprintf(stderr, "Could not allocate converted input sample pointers\n");
         }
         if (av_samples_alloc(*resampledData, NULL,
-                                      audioEncoderContext->channels,
-                                      inputFrame->nb_samples,
-                                      audioEncoderContext->sample_fmt, 0) < 0) {
+                             audioEncoderContext->channels,
+                             inputFrame->nb_samples,
+                             audioEncoderContext->sample_fmt, 0) < 0) {
             fprintf(stderr,
                     "Could not allocate converted input samples\n");
             av_freep(&(*resampledData)[0]);
             free(*resampledData);
         }
-    //convert samples
+        //convert samples
         swr_convert(resampleContext,
                     *resampledData, inputFrame->nb_samples,
                     (const uint8_t**)inputFrame->extended_data, inputFrame->nb_samples);
@@ -453,26 +435,26 @@ void ScreenRecorder::CaptureAudio() {
             }
             // Receive encoded packet
             while (ret >= 0) {
-            if ((ret = avcodec_receive_packet(audioEncoderContext, outputPacket)) >= 0) {
+                if ((ret = avcodec_receive_packet(audioEncoderContext, outputPacket)) >= 0) {
+                    outputPacket->stream_index = outAudioStreamIndex;
+
+                    if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
+                        throw std::runtime_error("Error in writing packet to output file.");
+
+                    av_packet_unref(outputPacket);
+                } else if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                    break;
+                else
+                    throw std::runtime_error("Error in receiving the decoded audio packet.");
+                av_packet_rescale_ts(outputPacket, audioEncoderContext->time_base, outputFormatContext->streams[outAudioStreamIndex]->time_base);
                 outputPacket->stream_index = outAudioStreamIndex;
 
+                write.lock();
                 if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
                     throw std::runtime_error("Error in writing packet to output file.");
+                write.unlock();
 
                 av_packet_unref(outputPacket);
-            } else if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                break;
-            else
-                throw std::runtime_error("Error in receiving the decoded audio packet.");
-            av_packet_rescale_ts(outputPacket, audioEncoderContext->time_base, outputFormatContext->streams[outAudioStreamIndex]->time_base);
-            outputPacket->stream_index = outAudioStreamIndex;
-
-            write.lock();
-            if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
-                throw std::runtime_error("Error in writing packet to output file.");
-            write.unlock();
-
-            av_packet_unref(outputPacket);
             }
             ret = 0;
         }
@@ -497,7 +479,7 @@ void ScreenRecorder::Capture() {
 
     std::unique_lock write(n);
     write.unlock();
-#ifdef macos
+#ifdef __APPLE__
     //Filters
     AVFrame *filteredFrame = av_frame_alloc();
     AVFilterInOut *inputs  = avfilter_inout_alloc();
@@ -519,67 +501,64 @@ void ScreenRecorder::Capture() {
                 continue;
             } else throw std::runtime_error("Error in reading packet from input context.");
         }
-            // Decode packet
-            if ((ret = avcodec_send_packet(decoderContext, inputPacket)) < 0) {
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
-                    ul.lock();
-                    continue;
-                } else throw std::runtime_error("Error in decoding the packet.");
-            }
-            // Get decoded inputFrame
+        // Decode packet
+        if ((ret = avcodec_send_packet(decoderContext, inputPacket)) < 0) {
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
+                ul.lock();
+                continue;
+            } else throw std::runtime_error("Error in decoding the packet.");
+        }
+        // Get decoded inputFrame
 
-            if ((ret = avcodec_receive_frame(decoderContext, inputFrame)) < 0) {
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
-                    ul.lock();
-                    continue;
-                } else throw std::runtime_error("Error in receiving the decoded frame.");
-            }
-#ifdef macos
-        if (crop) {
-                    // Push the decoded frame into the filtergraph
-                    if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
-                        throw std::runtime_error("Error in filtering.");
-                    // Pull the filtered frame from the buffersink
-                    if (av_buffersink_get_frame(sinkContext, filteredFrame) < 0)
-                        throw std::runtime_error("Error in filtering.");
+        if ((ret = avcodec_receive_frame(decoderContext, inputFrame)) < 0) {
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
+                ul.lock();
+                continue;
+            } else throw std::runtime_error("Error in receiving the decoded frame.");
+        }
+#ifdef __APPLE__
+        if (crop && false) {
+            // Push the decoded frame into the filtergraph
+            if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
+                throw std::runtime_error("Error in filtering.");
+            // Pull the filtered frame from the buffersink
+            if (av_buffersink_get_frame(sinkContext, filteredFrame) < 0)
+                throw std::runtime_error("Error in filtering.");
 
-                    //sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
+            //sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
 
-                    //filteredFrame->pkt_dts = outputFrame->pkt_dts;
-                }
+            //filteredFrame->pkt_dts = outputFrame->pkt_dts;
+        }
             // only if we need to crop the image
-                 else {
-                    // Resize the inputFrame
-                    sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height,
-                              outputFrame->data, outputFrame->linesize);
-                }
+        else {
+            // Resize the inputFrame
+            sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height,
+                      outputFrame->data, outputFrame->linesize);
+        }
 #else
         sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height,
                   outputFrame->data, outputFrame->linesize);
 #endif
 
+        // Encoded inputFrame
+        if ((ret = avcodec_send_frame(encoderContext, outputFrame)) < 0) {
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
+                ul.lock();
+                continue;
+            } else throw std::runtime_error("Error in encoding the frame.");
+        }
 
-
-            // Encoded inputFrame
-            if ((ret = avcodec_send_frame(encoderContext, outputFrame)) < 0) {
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
-                    ul.lock();
-                    continue;
-                } else throw std::runtime_error("Error in encoding the frame.");
-            }
-
-            // Receive encoded packet
-            if ((avcodec_receive_packet(encoderContext, outputPacket)) >= 0) {
-                outputPacket->pts = av_rescale_q(outputPacket->pts, encoderContext->time_base, videoStream->time_base);
-                outputPacket->dts = av_rescale_q(outputPacket->dts, encoderContext->time_base, videoStream->time_base);
-                write.lock();
-                if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
-                    throw std::runtime_error("Error in writing packet to output file.");
-                write.unlock();
-                av_packet_unref(outputPacket);
-            } else if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
-                throw std::runtime_error("Error in receiving the decoded packet.");
-
+        // Receive encoded packet
+        if ((avcodec_receive_packet(encoderContext, outputPacket)) >= 0) {
+            outputPacket->pts = av_rescale_q(outputPacket->pts, encoderContext->time_base, videoStream->time_base);
+            outputPacket->dts = av_rescale_q(outputPacket->dts, encoderContext->time_base, videoStream->time_base);
+            write.lock();
+            if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
+                throw std::runtime_error("Error in writing packet to output file.");
+            write.unlock();
+            av_packet_unref(outputPacket);
+        } else if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
+            throw std::runtime_error("Error in receiving the decoded packet.");
 
         ul.lock();
     }
