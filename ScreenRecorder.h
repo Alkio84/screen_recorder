@@ -52,10 +52,11 @@ extern "C" {
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/file.h"
-
+#include "libavutil/audio_fifo.h"
 // lib swresample
 
 #include "libswscale/swscale.h"
+#include "libswresample/swresample.h"
 
 }
 
@@ -70,13 +71,15 @@ private:
     AVCodecContext *decoderContext;
     AVCodecContext *encoderContext;
     AVStream *videoStream;
-    int videoStreamIndex;
+    int inVideoStreamIndex;
+    int outVideoStreamIndex;
 
     /* Audio */
     AVCodecContext *audioDecoderContext;
     AVCodecContext *audioEncoderContext;
     AVStream *audioStream;
-    int audioStreamIndex;
+    int inAudioStreamIndex;
+    int outAudioStreamIndex;
 
     /* Converter */
     SwsContext *swsContext;
@@ -89,18 +92,24 @@ private:
     /* Configure before starting the video */
     void Configure();
     void Capture();
+    void CaptureAudio();
     bool audio;
     int fullWidth, fullHeight;
     int width, height;
-    bool crop = false;
+    bool crop;
     std::pair<int, int> bottomLeft, topRight;
     std::string filename;
     int framerate;
 
     /*Thread Management*/
     std::thread recorder;
+    std::thread audioRecorder;
     bool capture = true;
     bool end = false;
+    //write
+    std::mutex n;
+    std::condition_variable cvWrite;
+    //pause-stop
     std::mutex m;
     std::condition_variable cv;
 public:
