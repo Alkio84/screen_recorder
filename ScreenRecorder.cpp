@@ -8,9 +8,9 @@
 
 #include "ScreenRecorder.h"
 
-AVFormatContext *configureInput(AVDictionary *options, int width, int height, std::pair<int, int> bottomLeft) {
-    AVFormatContext *formatContext = avformat_alloc_context();
-    formatContext->probesize = 5 * pow(10, 7);
+void ScreenRecorder::configureVideoInput() {
+    inputVideoFormatContext = avformat_alloc_context();
+    inputVideoFormatContext->probesize = 5 * pow(10, 7);
 
     /*std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
     std::string offsetX = std::to_string(std::get<1>(bottomLeft));
@@ -21,101 +21,83 @@ AVFormatContext *configureInput(AVDictionary *options, int width, int height, st
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
     inputFormat = av_find_input_format("gdigrab");
-    if(avformat_open_input(&formatContext,"desktop",inputFormat,&options) != 0)
+    if(avformat_open_input(&inputVideoFormatContext,"desktop",inputFormat,&videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif defined linux
     inputFormat=av_find_input_format("x11grab");
-    if(avformat_open_input(&formatContext,":0.0+10,20",inputFormat,&options) != 0)
+    if(avformat_open_input(&inputVideoFormatContext,":0.0+10,20",inputFormat,&options) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");
-    if(avformat_open_input(&formatContext, "1:", inputFormat, &options) != 0)
+    if(avformat_open_input(&inputVideoFormatContext, "1:", inputFormat, &options) != 0)
         throw std::runtime_error("Error in opening input.");
 #endif
 
     /* Applying frame rate */
-    av_dict_set(&options, "r", std::to_string(15).c_str(), 0);
-    if (avformat_find_stream_info(formatContext, nullptr) < 0)
+    av_dict_set(&videoOptions, "r", std::to_string(framerate).c_str(), 0);
+    if (avformat_find_stream_info(inputVideoFormatContext, nullptr) < 0)
         throw std::runtime_error("Unable to find the stream information.");
-
-    return formatContext;
 }
 
-AVFormatContext *configureOutput(std::string filename) {
-    AVFormatContext *formatContext = nullptr;
+void ScreenRecorder::inizializeOutput() {
     AVOutputFormat *outputFormat = nullptr;
     outputFormat = av_guess_format(nullptr, "output.mp4", nullptr);
     if(!outputFormat)
         throw std::runtime_error("Error in guessing format.");
-    avformat_alloc_output_context2(&formatContext, outputFormat, outputFormat->name, filename.c_str());
-    if (!formatContext)
+    avformat_alloc_output_context2(&outputFormatContext, outputFormat, outputFormat->name, filename.c_str());
+    if (!outputFormatContext)
         throw std::runtime_error("Error in allocating av format output context.");
-
-    return formatContext;
 }
-AVCodecContext *configureDecoder(AVFormatContext *formatContext, int &streamIndex, AVMediaType mediaType) {
-    AVCodecContext *decoderContext = nullptr;
-
+void ScreenRecorder::configureVideoDecoder() {
+    AVMediaType mediaType = AVMEDIA_TYPE_VIDEO;
     AVCodec *decoder = nullptr;
-    streamIndex = av_find_best_stream(formatContext, mediaType, -1, -1, &decoder, 0);
-    if (streamIndex < 0)
+    inVideoStreamIndex = av_find_best_stream(inputVideoFormatContext, mediaType, -1, -1, &decoder, 0);
+    if (inVideoStreamIndex < 0)
         throw std::runtime_error("Unable to find the stream index.\n");
 
-    decoder = avcodec_find_decoder(formatContext->streams[streamIndex]->codecpar->codec_id);
-    decoderContext = avcodec_alloc_context3(decoder);
-    avcodec_parameters_to_context(decoderContext, formatContext->streams[streamIndex]->codecpar);
-    if(mediaType==AVMEDIA_TYPE_AUDIO) decoderContext->frame_size = 1024;
-    if (avcodec_open2(decoderContext, decoder, NULL) < 0)
+    decoder = avcodec_find_decoder(inputVideoFormatContext->streams[inVideoStreamIndex]->codecpar->codec_id);
+    videoDecoderContext = avcodec_alloc_context3(decoder);
+    avcodec_parameters_to_context(videoDecoderContext, inputVideoFormatContext->streams[inVideoStreamIndex]->codecpar);
+    if (avcodec_open2(videoDecoderContext, decoder, NULL) < 0)
         throw std::runtime_error("Unable to open the av codec.");
-
-    return decoderContext;
 }
-AVCodecContext *configureEncoder(AVStream *stream, AVCodecID id, int framerate) {
-    AVCodecContext *encoderContext = nullptr;
+void ScreenRecorder::configureVideoEncoder() {
 
-    AVCodec *encoder = avcodec_find_encoder(id);
+    AVCodec *encoder = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
     if (!encoder)
         throw std::invalid_argument("Invalid coded id.");
 
     /* Alloc encoder context */
-    encoderContext = avcodec_alloc_context3(encoder);
-    if (!encoderContext)
+    videoEncoderContext = avcodec_alloc_context3(encoder);
+    if (!videoEncoderContext)
         throw std::runtime_error("Error in allocating the codec context.");
 
-    avcodec_parameters_to_context(encoderContext, stream->codecpar);
+    avcodec_parameters_to_context(videoEncoderContext, outVideoStream->codecpar);
 
     /* Set property of the video file */
-    if(id == AV_CODEC_ID_MPEG4) {
-        encoderContext->pix_fmt = AV_PIX_FMT_YUV420P;
-        //encoderContext->frame_size = 1000;
-        encoderContext->time_base = {1, framerate};
-    } else {
-        encoderContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
-        encoderContext->sample_rate = 44100; // 44.1KHz
-        encoderContext->channel_layout = AV_CH_LAYOUT_MONO;
-        encoderContext->bit_rate = 96000;
-        encoderContext->time_base = {1, 41000};
-        encoderContext->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-    }
+    videoEncoderContext->pix_fmt = AV_PIX_FMT_YUV420P;
+    videoEncoderContext->time_base = {1, framerate};
 
-    if (avcodec_open2(encoderContext, encoder, nullptr) < 0)
-        throw std::runtime_error("Error in opening the avcodec for " + std::to_string(id));
 
-    return encoderContext;
+    if (avcodec_open2(videoEncoderContext, encoder, nullptr) < 0)
+        throw std::runtime_error("Error in opening the avcodec for " + std::to_string(AV_CODEC_ID_MPEG4));
+
 }
-void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceContext, AVFilterContext *&sinkContext, AVFilterGraph *&filterGraph, const std::string filtersDesc) {
+void ScreenRecorder::configureFilters() {
+
     const AVFilter *bufferSource = avfilter_get_by_name("buffer");
     const AVFilter *bufferSink = avfilter_get_by_name("buffersink");
     AVFilterInOut *inputs  = avfilter_inout_alloc();
     AVFilterInOut *outputs = avfilter_inout_alloc();
     filterGraph = avfilter_graph_alloc();
-    const std::string args = "video_size=" + std::to_string(decoderContext->width) +
-                             "x" + std::to_string(decoderContext->height) +
-                             ":pix_fmt=" + std::to_string(decoderContext->pix_fmt) +
+    std::string filtersDesc = "crop=w=800:h=800:x=100:y=100";
+    const std::string args = "video_size=" + std::to_string(videoDecoderContext->width) +
+                             "x" + std::to_string(videoDecoderContext->height) +
+                             ":pix_fmt=" + std::to_string(videoDecoderContext->pix_fmt) +
                              ":time_base=" + std::to_string(1) +
                              "/" + std::to_string(15) +
-                             ":pixel_aspect=" + std::to_string(decoderContext->sample_aspect_ratio.num) +
-                             "/" + std::to_string(decoderContext->sample_aspect_ratio.den);
+                             ":pixel_aspect=" + std::to_string(videoDecoderContext->sample_aspect_ratio.num) +
+                             "/" + std::to_string(videoDecoderContext->sample_aspect_ratio.den);
 
 
     if (!outputs || !inputs || !filterGraph) {
@@ -161,66 +143,84 @@ void configureFilter(AVCodecContext *decoderContext,AVFilterContext *&sourceCont
     avfilter_inout_free(&inputs);
     avfilter_inout_free(&outputs);
 }
-AVStream *configureVideoStream(AVFormatContext *&formatContext, int width, int height, int framerate) {
+void ScreenRecorder::configureOutVideoStream() {
     /* Alloc and set stream */
-    AVStream *videoStream = avformat_new_stream(formatContext, NULL);
-    if (!videoStream)
+    outVideoStream = avformat_new_stream(outputFormatContext, NULL);
+    if (!outVideoStream)
         throw std::runtime_error("Error in creating a av format new stream.");
 
-    videoStream->codecpar->codec_id = AV_CODEC_ID_MPEG4;
-    videoStream->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
-    videoStream->codecpar->bit_rate = 9000 * 1024 * 2; // 2500000
+    outVideoStream->codecpar->codec_id = AV_CODEC_ID_MPEG4;
+    outVideoStream->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+    outVideoStream->codecpar->bit_rate = 9000 * 1024 * 2; // 2500000
     /* Applying width, height and framerate */
-    videoStream->codecpar->width = width;
-    videoStream->codecpar->height = height;
-    videoStream->time_base = {1, framerate};
-
-    return videoStream;
+    outVideoStream->codecpar->width = width;
+    outVideoStream->codecpar->height = height;
+    outVideoStream->time_base = {1, framerate};
 }
 
-void configureOutput(AVFormatContext *&formatContext, AVCodecContext *&encoderContext, AVCodecContext *&encoderAudioContext, int &videoIndex, int &audioIndex, std::string filename) {
+void ScreenRecorder::configureOutput() {
     /* Create empty video file */
-    if (!(formatContext->flags & AVFMT_NOFILE))
-        if (avio_open2(&formatContext->pb, filename.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr) < 0)
+    if (!(outputFormatContext->flags & AVFMT_NOFILE))
+        if (avio_open2(&outputFormatContext->pb, filename.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr) < 0)
             throw std::runtime_error("Error in creating video file.");
 
     /* Some container formats (like MP4) require global headers to be present
 Mark the encoder so that it behaves accordingly. */
-    if (formatContext->oformat->flags & AVFMT_GLOBALHEADER) {
-        encoderContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    if (outputFormatContext->oformat->flags & AVFMT_GLOBALHEADER) {
+        videoEncoderContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
-    if (!formatContext->nb_streams)
+    if (!outputFormatContext->nb_streams)
         throw std::runtime_error("Output file does not contain any stream video header.");
 
     /* MP4 files require header information */
-    if (avformat_write_header(formatContext, nullptr) < 0)
+    if (avformat_write_header(outputFormatContext, nullptr) < 0)
         throw std::runtime_error("Error in writing video header.");
 
-    videoIndex = formatContext->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO ? 0 : 1;
-    audioIndex = formatContext->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ? 0 : 1;
+    outVideoStreamIndex = outputFormatContext->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO ? 0 : 1;
+    outAudioStreamIndex = outputFormatContext->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ? 0 : 1;
 }
 
 /* Initialize the resources*/
-ScreenRecorder::ScreenRecorder() : filename("./output.mp4"), framerate(30), audio(false), crop(false) {
-    inputFormatContext = nullptr;
+ScreenRecorder::ScreenRecorder() : filename("./output.mp4"), framerate(15), audio(false), crop(false), capture(true), end(false) {
+    inputVideoFormatContext = nullptr;
+    inputAudioFormatContext = nullptr;
     outputFormatContext = nullptr;
-    decoderContext = nullptr;
-    encoderContext = nullptr;
+    videoDecoderContext = nullptr;
+    videoEncoderContext = nullptr;
+    inVideoStream = nullptr;
+    outVideoStream = nullptr;
+    inVideoStreamIndex = -1;
+    outVideoStreamIndex = -1;
+    videoOptions = nullptr;
+
+    audioDecoderContext = nullptr;
+    audioEncoderContext = nullptr;
+    inAudioStream = nullptr;
+    outAudioStream = nullptr;
+    inAudioStreamIndex = -1;
+    outAudioStreamIndex = -1;
+    fifo = nullptr;
+    swsContext = nullptr;
+    resampleContext = nullptr;
+
+    sourceContext = nullptr;
+    sinkContext = nullptr;
+    filterGraph = nullptr;
 }
 
 /* Uninitialize the resources */
-ScreenRecorder::~ScreenRecorder() {
+ScreenRecorder::~ScreenRecorder() { //DA RIVEDERE COMPLETAMENTE
     /* Trust me, bro */
     if (recorder.joinable()) recorder.join();
 
-    avformat_close_input(&inputFormatContext);
+    /*avformat_close_input(&inputFormatContext);
     if (!inputFormatContext) std::cout << "\nfile closed successfully";
     else std::cout << "\nunable to close the file";
 
     avformat_free_context(inputFormatContext);
     if (!inputFormatContext) std::cout << "\navformat free successfully";
-    else std::cout << "\nunable to free avformat context";
+    else std::cout << "\nunable to free avformat context";*/
 }
 
 void ScreenRecorder::Configure() {
@@ -235,24 +235,24 @@ void ScreenRecorder::Configure() {
     }
 
     /* Create and configure input format */
-    inputFormatContext = configureInput(nullptr, this->fullWidth, this->fullHeight, this->bottomLeft);
+    ScreenRecorder::configureVideoInput();
     ScreenRecorder::configureAudioInput();
     /* Create and configure video and audio decoder */
-    decoderContext = configureDecoder(inputFormatContext, inVideoStreamIndex, AVMEDIA_TYPE_VIDEO);
+    ScreenRecorder::configureVideoDecoder();
     ScreenRecorder::configureAudioDecoder();
     /* Create and configure output format */
-    outputFormatContext = configureOutput(filename);
+    ScreenRecorder::inizializeOutput();
     /* Create and configure video stream */
-    videoStream = configureVideoStream(outputFormatContext, width, height, framerate);
+    ScreenRecorder::configureOutVideoStream();
     ScreenRecorder::configureOutAudioStream();
     /* Create and configure encoder */
-    encoderContext = configureEncoder(videoStream, AV_CODEC_ID_MPEG4, framerate);
+    ScreenRecorder::configureVideoEncoder();
     ScreenRecorder::configureAudioEncoder();
     /* Configure output setting and write file header */
-    configureOutput(outputFormatContext, encoderContext, audioEncoderContext, outVideoStreamIndex, outAudioStreamIndex, filename);
+    ScreenRecorder::configureOutput();
 
-    swsContext = sws_getContext(decoderContext->width, decoderContext->height, decoderContext->pix_fmt,
-                                encoderContext->width, encoderContext->height, encoderContext->pix_fmt,
+    swsContext = sws_getContext(videoDecoderContext->width, videoDecoderContext->height, videoDecoderContext->pix_fmt,
+                                videoEncoderContext->width, videoEncoderContext->height, videoEncoderContext->pix_fmt,
                                 SWS_BICUBIC, NULL, NULL, NULL);
 
     /* Configure filter crop */
@@ -260,8 +260,10 @@ void ScreenRecorder::Configure() {
     configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, "crop=w=800:h=800:x=100:y=100");
 #endif
     /* Clean avformat and pause it */
-    av_read_pause(inputFormatContext);
-    avformat_flush(inputFormatContext);
+    av_read_pause(inputVideoFormatContext);
+    avformat_flush(inputVideoFormatContext);
+    av_read_pause(inputAudioFormatContext);
+    avformat_flush(inputAudioFormatContext);
 
 
 }
@@ -274,9 +276,9 @@ void ScreenRecorder::Capture() {
     AVPacket *outputPacket = av_packet_alloc();
     AVFrame *inputFrame = av_frame_alloc();
     AVFrame *outputFrame = av_frame_alloc();
-    outputFrame->format = encoderContext->pix_fmt;
-    outputFrame->width = encoderContext->width;
-    outputFrame->height = encoderContext->height;
+    outputFrame->format = videoEncoderContext->pix_fmt;
+    outputFrame->width = videoEncoderContext->width;
+    outputFrame->height = videoEncoderContext->height;
     av_frame_get_buffer(outputFrame, 0);
 
     std::unique_lock write(n);
@@ -297,14 +299,14 @@ void ScreenRecorder::Capture() {
         ul.unlock();
 
         // Get packet
-        if ((ret = av_read_frame(inputFormatContext, inputPacket)) < 0) {
+        if ((ret = av_read_frame(inputVideoFormatContext, inputPacket)) < 0) {
             if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                 ul.lock();
                 continue;
             } else throw std::runtime_error("Error in reading packet from input context.");
         }
         // Decode packet
-        if ((ret = avcodec_send_packet(decoderContext, inputPacket)) < 0) {
+        if ((ret = avcodec_send_packet(videoDecoderContext, inputPacket)) < 0) {
             if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                 ul.lock();
                 continue;
@@ -312,7 +314,7 @@ void ScreenRecorder::Capture() {
         }
         // Get decoded inputFrame
 
-        if ((ret = avcodec_receive_frame(decoderContext, inputFrame)) < 0) {
+        if ((ret = avcodec_receive_frame(videoDecoderContext, inputFrame)) < 0) {
             if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                 ul.lock();
                 continue;
@@ -343,7 +345,7 @@ void ScreenRecorder::Capture() {
 #endif
 
         // Encoded inputFrame
-        if ((ret = avcodec_send_frame(encoderContext, outputFrame)) < 0) {
+        if ((ret = avcodec_send_frame(videoEncoderContext, outputFrame)) < 0) {
             if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                 ul.lock();
                 continue;
@@ -351,9 +353,9 @@ void ScreenRecorder::Capture() {
         }
 
         // Receive encoded packet
-        if ((avcodec_receive_packet(encoderContext, outputPacket)) >= 0) {
-            outputPacket->pts = av_rescale_q(outputPacket->pts, encoderContext->time_base, videoStream->time_base);
-            outputPacket->dts = av_rescale_q(outputPacket->dts, encoderContext->time_base, videoStream->time_base);
+        if ((avcodec_receive_packet(videoEncoderContext, outputPacket)) >= 0) {
+            outputPacket->pts = av_rescale_q(outputPacket->pts, videoEncoderContext->time_base, outVideoStream->time_base);
+            outputPacket->dts = av_rescale_q(outputPacket->dts, videoEncoderContext->time_base, outVideoStream->time_base);
             write.lock();
             if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
                 throw std::runtime_error("Error in writing packet to output file.");

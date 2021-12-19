@@ -63,23 +63,22 @@ extern "C" {
 class ScreenRecorder {
 private:
     /* Input and output */
-    AVFormatContext *inputFormatContext;
+    AVFormatContext *inputVideoFormatContext;
     AVFormatContext *inputAudioFormatContext;
     AVFormatContext *outputFormatContext;
 
     /* Video */
-    AVCodecContext *decoderContext;
-    AVCodecContext *encoderContext;
-    AVStream *videoStream;
+    AVCodecContext *videoDecoderContext;
+    AVCodecContext *videoEncoderContext;
     AVStream *inVideoStream;
     AVStream *outVideoStream;
     int inVideoStreamIndex;
     int outVideoStreamIndex;
+    AVDictionary *videoOptions;
 
     /* Audio */
     AVCodecContext *audioDecoderContext;
     AVCodecContext *audioEncoderContext;
-    AVStream *audioStream;
     AVStream *inAudioStream;
     AVStream *outAudioStream;
     int inAudioStreamIndex;
@@ -99,12 +98,25 @@ private:
     void Configure();
     void Capture();
     void CaptureAudio();
+
+    /* Video functions */
+    void inizializeOutput();
+    void configureVideoInput();
+    void configureVideoDecoder();
+    void configureVideoEncoder();
+    void configureOutVideoStream();
+    void configureOutput();
+
+
+    /* Audio functions */
     void configureAudioInput();
     void configureAudioDecoder();
     void configureAudioEncoder();
     void configureOutAudioStream();
 
 
+    /* Filter functions */
+    void configureFilters();
 
     /* Parameters */
     bool audio;
@@ -118,11 +130,10 @@ private:
     /*Thread Management*/
     std::thread recorder;
     std::thread audioRecorder;
-    bool capture = true;
-    bool end = false;
+    bool capture;
+    bool end;
     //write
     std::mutex n;
-    std::condition_variable cvWrite;
     //pause-stop
     std::mutex m;
     std::condition_variable cv;
@@ -140,12 +151,14 @@ public:
 
     void Pause() {
         std::unique_lock ul(m);
-        av_read_pause(inputFormatContext);
+        av_read_pause(inputVideoFormatContext);
+        av_read_pause(inputAudioFormatContext);
         capture = false;
     }
 
     void Resume() {
-        av_read_play(inputFormatContext);
+        av_read_play(inputVideoFormatContext);
+        av_read_play(inputAudioFormatContext);
         std::unique_lock ul(m);
         capture = true;
         cv.notify_all();
