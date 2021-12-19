@@ -228,9 +228,7 @@ void ScreenRecorder::CaptureAudio() {
             if(ret < 0) printf("AAAAAA\n");
             ret = av_audio_fifo_read(fifo, (void**)outputFrame->data, audioEncoderContext->frame_size);
             if(ret < 0) printf("AAAAAA\n");
-            pts = frameCount * outAudioStream->time_base.den  / audioEncoderContext->sample_rate * 1024;
-            if(pts<0)
-                pts = 10;
+            pts = outAudioStream->time_base.den  / audioEncoderContext->sample_rate * 1024 * frameCount;
             outputFrame->pts = pts;
             // Encoded inputFrame
             if ((avcodec_send_frame(audioEncoderContext, outputFrame)) < 0) {
