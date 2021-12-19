@@ -19,7 +19,7 @@ add_executable(${PROJECT_NAME}
         main.cpp
         ScreenRecorder.h
         ScreenRecorder.cpp
-        )
+        AudioRecorder.cpp)
 target_link_libraries(screen_recorder
         avcodec
         avformat

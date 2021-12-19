@@ -71,6 +71,8 @@ private:
     AVCodecContext *decoderContext;
     AVCodecContext *encoderContext;
     AVStream *videoStream;
+    AVStream *inVideoStream;
+    AVStream *outVideoStream;
     int inVideoStreamIndex;
     int outVideoStreamIndex;
 
@@ -78,11 +80,15 @@ private:
     AVCodecContext *audioDecoderContext;
     AVCodecContext *audioEncoderContext;
     AVStream *audioStream;
+    AVStream *inAudioStream;
+    AVStream *outAudioStream;
     int inAudioStreamIndex;
     int outAudioStreamIndex;
+    AVAudioFifo *fifo;
 
     /* Converter */
     SwsContext *swsContext;
+    SwrContext *resampleContext;
 
     /*Filter*/
     AVFilterContext *sourceContext;
@@ -93,6 +99,14 @@ private:
     void Configure();
     void Capture();
     void CaptureAudio();
+    void configureAudioInput();
+    void configureAudioDecoder();
+    void configureAudioEncoder();
+    void configureOutAudioStream();
+
+
+
+    /* Parameters */
     bool audio;
     int fullWidth, fullHeight;
     int width, height;
@@ -142,8 +156,10 @@ public:
         end = true;
         cv.notify_all();
         ul.unlock();
-        audioRecorder.join();
-        recorder.join();
+        if(audio && audioRecorder.joinable())
+            audioRecorder.join();
+        if(recorder.joinable())
+            recorder.join();
 
         if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
         avformat_free_context(outputFormatContext);
