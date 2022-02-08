@@ -52,7 +52,7 @@ int main() {
     screenRecorder.Start();
     std::cout<<"started"<<std::endl;
     std::this_thread::sleep_for(3s);
-/*
+
     screenRecorder.Pause();
     std::cout<<"paused"<<std::endl;
     std::this_thread::sleep_for(2s);
@@ -60,7 +60,7 @@ int main() {
     screenRecorder.Resume();
     std::cout<<"resumed"<<std::endl;
     std::this_thread::sleep_for(3s);
-*/
+
     screenRecorder.Stop();
     std::cout<<"stopped"<<std::endl;
 

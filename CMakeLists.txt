@@ -9,17 +9,23 @@ IF(WIN32)
     LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/lib)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 ELSE()
-    find_library(CoreFoundation CoreFoundation)
-    find_library(CoreGraphics CoreGraphics)
+    IF(APPLE)
+        find_library(CoreFoundation CoreFoundation)
+        find_library(CoreGraphics CoreGraphics)
 
-    INCLUDE_DIRECTORIES(/usr/local/Cellar/ffmpeg/4.4_2/include)
-    LINK_DIRECTORIES(/usr/local/Cellar/ffmpeg/4.4_2/lib)
+        INCLUDE_DIRECTORIES(/usr/local/Cellar/ffmpeg/4.4_2/include)
+        LINK_DIRECTORIES(/usr/local/Cellar/ffmpeg/4.4_2/lib)
+    ELSE()
+        INCLUDE_DIRECTORIES(/usr/include/x86_64-linux-gnu)
+        LINK_DIRECTORIES(/usr/lib/x86_64-linux-gnu)
+    ENDIF()
 ENDIF()
 add_executable(${PROJECT_NAME}
         main.cpp
         ScreenRecorder.h
         ScreenRecorder.cpp
         AudioRecorder.cpp)
+IF(APPLE)
 target_link_libraries(screen_recorder
         avcodec
         avformat
@@ -32,3 +38,15 @@ target_link_libraries(screen_recorder
         ${CoreFoundation}
         ${CoreGraphics}
         )
+ELSE()
+    target_link_libraries(screen_recorder
+            avcodec
+            avformat
+            swscale
+            avdevice
+            avfilter
+            avutil
+            postproc
+            swresample
+            )
+ENDIF()

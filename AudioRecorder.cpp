@@ -16,11 +16,11 @@ void ScreenRecorder::configureAudioInput() {
     if(avformat_open_input(&inputAudioFormatContext,"audio=Microfono (4- HyperX Cloud Flight Wireless)",inputFormat, nullptr) != 0)
         throw std::runtime_error("Error in opening audio input.");
 #elif defined linux
-    inputAudioFormat=av_find_input_format("x11grab");
+    inputFormat=av_find_input_format("x11grab");
     if(avformat_open_input(&inputAudioFormatContext,":0.0+10,20",inputFormat,nullptr) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
-    inputAudioFormat = av_find_input_format("avfoundation");
+    inputFormat = av_find_input_format("avfoundation");
     if(avformat_open_input(&inputAudioFormatContext, ":0", inputFormat, nullptr) != 0)
         throw std::runtime_error("Error in opening input.");
 #endif

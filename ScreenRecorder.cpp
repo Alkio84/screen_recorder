@@ -23,9 +23,9 @@ void ScreenRecorder::configureVideoInput() {
     inputFormat = av_find_input_format("gdigrab");
     if(avformat_open_input(&inputVideoFormatContext,"desktop",inputFormat,&videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
-#elif defined linux
+#elif __linux__
     inputFormat=av_find_input_format("x11grab");
-    if(avformat_open_input(&inputVideoFormatContext,":0.0+10,20",inputFormat,&options) != 0)
+    if(avformat_open_input(&inputVideoFormatContext,":0.0+10,20",inputFormat,nullptr) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");

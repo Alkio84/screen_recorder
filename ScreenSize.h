@@ -9,9 +9,9 @@
 #ifndef ScreenSize_h
 #define ScreenSize_h
 
-#if WIN32
+#if _WIN32
 #include <windows.h>
-#else
+#elif __APPLE__
 #include "CoreGraphics/CoreGraphics.h"
 #endif
 
@@ -31,7 +31,7 @@ public:
         std::cout << "Altezza Schermo: " << GetSystemMetrics(SM_CYVIRTUALSCREEN) << std::endl;
         std::cout << "Lato sinistro: " << GetSystemMetrics(SM_XVIRTUALSCREEN) << std::endl;
         std::cout << "Lato alto: " << GetSystemMetrics(SM_YVIRTUALSCREEN) << std::endl;*/
-#else
+#elif APPLE
         auto mainDisplayId = CGMainDisplayID();
         /*
         std::cout << "Current resolution was "
@@ -53,6 +53,8 @@ public:
             height = CGDisplayModeGetHeight(mode);
             //std::cout << std::endl << w << 'x' << h;
         }
+#elif __linux__
+        //TODO LINUX
 #endif
     }
 };
