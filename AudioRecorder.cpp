@@ -143,7 +143,7 @@ void ScreenRecorder::CaptureAudio() {
     int ret;
     while (!end) {
         // Mutual Exclusion, lock done at the end of the cycle
-        cv.wait(ul, [this]() { return this->capture; });
+        //cv.wait(ul, [this]() { return this->capture; });
 
         ul.unlock();
 
@@ -216,6 +216,7 @@ void ScreenRecorder::CaptureAudio() {
         av_packet_unref(inputPacket);
 
         while (av_audio_fifo_size(fifo) >= audioEncoderContext->frame_size){
+
             AVFrame* outputFrame = av_frame_alloc();
 
             outputFrame->nb_samples = audioEncoderContext->frame_size;
@@ -225,9 +226,15 @@ void ScreenRecorder::CaptureAudio() {
             outputFrame->sample_rate = audioEncoderContext->sample_rate;
 
             ret = av_frame_get_buffer(outputFrame, 0);
-            if(ret < 0) printf("AAAAAA\n");
+            if(ret < 0) throw std::runtime_error("Error in retrieving buffer.");
             ret = av_audio_fifo_read(fifo, (void**)outputFrame->data, audioEncoderContext->frame_size);
-            if(ret < 0) printf("AAAAAA\n");
+            if(ret < 0) throw std::runtime_error("Error in reading from fifo.");
+            ul.lock();
+            if(!this->capture) {
+                ul.unlock();
+                continue;
+            }
+            else ul.unlock();
             pts = outAudioStream->time_base.den  / audioEncoderContext->sample_rate * 1024 * frameCount;
             outputFrame->pts = pts;
             // Encoded inputFrame
@@ -255,11 +262,11 @@ void ScreenRecorder::CaptureAudio() {
             outputPacket->dts = pts;
             outputPacket->pts = pts;
             frameCount++;
-
             write.lock();
             if (av_interleaved_write_frame(outputFormatContext, outputPacket) < 0)
                 throw std::runtime_error("Error in writing packet to output file.");
             write.unlock();
+
 
             av_packet_unref(outputPacket);
 
