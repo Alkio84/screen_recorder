@@ -13,8 +13,8 @@ void ScreenRecorder::configureAudioInput() {
     //av_dict_set(&options, "sample_rate",sr.c_str(), 0);
 #ifdef _WIN32
     inputFormat=av_find_input_format("dshow");
-    if(avformat_open_input(&inputAudioFormatContext,"audio=Microfono (4- HyperX Cloud Flight Wireless)",inputFormat, nullptr) != 0)
-        throw std::runtime_error("Error in opening audio input.");
+    if(avformat_open_input(&inputAudioFormatContext,"isAudioRecorded=Microfono (4- HyperX Cloud Flight Wireless)",inputFormat, nullptr) != 0)
+        throw std::runtime_error("Error in opening isAudioRecorded input.");
 #elif defined linux
     inputFormat=av_find_input_format("x11grab");
     if(avformat_open_input(&inputAudioFormatContext,":0.0+10,20",inputFormat,nullptr) != 0)
@@ -129,7 +129,7 @@ void ScreenRecorder::CaptureAudio() {
         //return error;
     }
 
-    //use a fifo buffer for the audio samples to be encoded
+    //use a fifo buffer for the isAudioRecorded samples to be encoded
 
     if (!(fifo = av_audio_fifo_alloc(requireAudioFmt,
                                      audioDecoderContext->channels, audioDecoderContext->sample_rate*2))) {
@@ -203,7 +203,7 @@ void ScreenRecorder::CaptureAudio() {
         if (ret < 0) {
             throw std::runtime_error("Fail to swr_convert.");
         }
-        if (av_audio_fifo_space(fifo) < inputFrame->nb_samples) throw std::runtime_error("audio buffer is too small.");
+        if (av_audio_fifo_space(fifo) < inputFrame->nb_samples) throw std::runtime_error("isAudioRecorded buffer is too small.");
 
         ret = av_audio_fifo_write(fifo, (void**)cSamples, inputFrame->nb_samples);
         if (ret < 0) {
@@ -255,7 +255,7 @@ void ScreenRecorder::CaptureAudio() {
 
                 continue;
             else
-                throw std::runtime_error("Error in receiving the decoded audio packet.");
+                throw std::runtime_error("Error in receiving the decoded isAudioRecorded packet.");
             //av_packet_rescale_ts(outputPacket, audioEncoderContext->time_base, outputFormatContext->streams[outAudioStreamIndex]->time_base);
             outputPacket->stream_index = outAudioStream->index;
             outputPacket->duration = outAudioStream->time_base.den * 1024 / audioEncoderContext->sample_rate;

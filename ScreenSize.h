@@ -31,7 +31,7 @@ public:
         std::cout << "Altezza Schermo: " << GetSystemMetrics(SM_CYVIRTUALSCREEN) << std::endl;
         std::cout << "Lato sinistro: " << GetSystemMetrics(SM_XVIRTUALSCREEN) << std::endl;
         std::cout << "Lato alto: " << GetSystemMetrics(SM_YVIRTUALSCREEN) << std::endl;*/
-#elif APPLE
+#elif __APPLE__
         auto mainDisplayId = CGMainDisplayID();
         /*
         std::cout << "Current resolution was "

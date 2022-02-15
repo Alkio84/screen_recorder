@@ -107,22 +107,19 @@ private:
     void configureOutVideoStream();
     void configureOutput();
 
-
     /* Audio functions */
     void configureAudioInput();
     void configureAudioDecoder();
     void configureAudioEncoder();
     void configureOutAudioStream();
 
-
     /* Filter functions */
     void configureFilters();
 
     /* Parameters */
-    bool audio;
-    int fullWidth, fullHeight;
+    bool isAudioRecorded;
+    bool isCropped;
     int width, height;
-    bool crop;
     std::pair<int, int> bottomLeft, topRight;
     std::string filename;
     int framerate;
@@ -146,7 +143,7 @@ public:
         ScreenRecorder::Configure();
 
         recorder = std::thread(&ScreenRecorder::Capture, this);
-        audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
+        if(isAudioRecorded) audioRecorder = std::thread(&ScreenRecorder::CaptureAudio, this);
     }
 
     void Pause() {
@@ -165,84 +162,47 @@ public:
     }
 
     void Stop() {
-        std::unique_lock ul(m);
-        end = true;
-        cv.notify_all();
-        ul.unlock();
-        if(audio && audioRecorder.joinable())
-            audioRecorder.join();
-        if(recorder.joinable())
-            recorder.join();
+        try {
+            std::unique_lock ul(m);
+            end = true;
+            cv.notify_all();
+            ul.unlock();
+            if (isAudioRecorded && audioRecorder.joinable())
+                audioRecorder.join();
+            if (recorder.joinable())
+                recorder.join();
 
-        if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
-        avformat_free_context(outputFormatContext);
-
-    }
-
-    /* ENUMS */
-    enum Resolution {
-        ORIGINAL,
-        HALF
-    };
-
-    enum ViewPort {
-        FULLSCREEN,
-        LEFT_HALF,
-        RIGHT_HALF,
-        TOP_HALF,
-        BOTTOM_HALF
-    };
-
-    /* SETTERS */
-    /* Set output file resolution */
-    void setResolution(int width, int height) {
-        this->width = width;
-        this->height = height;
-        ScreenSize::getScreenResolution(fullWidth, fullHeight);
-    }
-
-    void setResolution(Resolution resolution) {
-        switch (resolution) {
-            case ORIGINAL:
-                ScreenSize::getScreenResolution(width, height);
-                ScreenSize::getScreenResolution(fullWidth, fullHeight);
-                break;
-            case HALF:
-
-                break;
-            default:
-                break;
+            if (av_write_trailer(outputFormatContext) < 0) throw std::runtime_error("Error in writing av trailer.");
+            avformat_free_context(outputFormatContext);
+        } catch (std::exception &ex) {
+            std::cout << ex.what() << std::endl;
         }
     }
 
+    /* SETTERS */
     void recordAudio(bool audio) {
-        this->audio = audio;
+        this->isAudioRecorded = audio;
     }
 
     /* Set viewport with bottom left corner and top right corner */
     void setViewPortFromCorners1(std::pair<int, int> bottomLeft, std::pair<int, int> topRight) {
         this->bottomLeft = bottomLeft;
         this->topRight = topRight;
-        this->crop = true;
+        this->isCropped = true;
     };
 
     /* Set viewport with top left corner and bottom right corner */
     void setViewPortFromCorners2(std::pair<int, int> topLeft, std::pair<int, int> bottomRight) {
         this->bottomLeft = std::make_pair(topLeft.first, bottomRight.second);
         this->topRight = std::make_pair(bottomRight.first, topLeft.second);
-        this->crop = true;
+        this->isCropped = true;
     };
 
     /* Set viewport with bottom left corner dimensions */
     void setViewPort(std::pair<int, int> bottomLeft, int width, int height) {
         this->bottomLeft = bottomLeft;
         this->topRight = std::make_pair(bottomLeft.first + width, bottomLeft.second + height);
-        this->crop = true;
-    };
-
-    /* Set viewport from keyword */
-    void setViewPort(ViewPort viewport) {
-
+        this->isCropped = true;
     };
 
     void setOutputFile(std::string filename) {

@@ -29,7 +29,7 @@ void ScreenRecorder::configureVideoInput() {
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");
-    if(avformat_open_input(&inputVideoFormatContext, "1:", inputFormat, &options) != 0)
+    if(avformat_open_input(&inputVideoFormatContext, "1:", inputFormat, &videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #endif
 
@@ -38,7 +38,6 @@ void ScreenRecorder::configureVideoInput() {
     if (avformat_find_stream_info(inputVideoFormatContext, nullptr) < 0)
         throw std::runtime_error("Unable to find the stream information.");
 }
-
 void ScreenRecorder::inizializeOutput() {
     AVOutputFormat *outputFormat = nullptr;
     outputFormat = av_guess_format(nullptr, "output.mp4", nullptr);
@@ -84,7 +83,6 @@ void ScreenRecorder::configureVideoEncoder() {
 
 }
 void ScreenRecorder::configureFilters() {
-
     const AVFilter *bufferSource = avfilter_get_by_name("buffer");
     const AVFilter *bufferSink = avfilter_get_by_name("buffersink");
     AVFilterInOut *inputs  = avfilter_inout_alloc();
@@ -157,7 +155,6 @@ void ScreenRecorder::configureOutVideoStream() {
     outVideoStream->codecpar->height = height;
     outVideoStream->time_base = {1, framerate};
 }
-
 void ScreenRecorder::configureOutput() {
     /* Create empty video file */
     if (!(outputFormatContext->flags & AVFMT_NOFILE))
@@ -182,7 +179,7 @@ Mark the encoder so that it behaves accordingly. */
 }
 
 /* Initialize the resources*/
-ScreenRecorder::ScreenRecorder() : filename("./output.mp4"), framerate(15), audio(false), crop(false), capture(true), end(false) {
+ScreenRecorder::ScreenRecorder() : filename("./output.mp4"), framerate(15), isAudioRecorded(false), isCropped(false), capture(true), end(false) {
     inputVideoFormatContext = nullptr;
     inputAudioFormatContext = nullptr;
     outputFormatContext = nullptr;
@@ -227,17 +224,17 @@ void ScreenRecorder::Configure() {
     avformat_network_init();
     avdevice_register_all();
 
-    if (crop) {
-        /* Viewport is default, fullscreen */
-        setResolution(std::get<1>(topRight) - std::get<1>(bottomLeft), std::get<0>(topRight) - std::get<0>(bottomLeft));
+    if (isCropped) {
+        this->width = std::get<1>(topRight) - std::get<1>(bottomLeft);
+        this->height = std::get<0>(topRight) - std::get<0>(bottomLeft);
     } else {
-        ScreenRecorder::setResolution(Resolution::ORIGINAL);
+        ScreenSize::getScreenResolution(width, height);
     }
 
     /* Create and configure input format */
     ScreenRecorder::configureVideoInput();
     ScreenRecorder::configureAudioInput();
-    /* Create and configure video and audio decoder */
+    /* Create and configure video and isAudioRecorded decoder */
     ScreenRecorder::configureVideoDecoder();
     ScreenRecorder::configureAudioDecoder();
     /* Create and configure output format */
@@ -255,21 +252,19 @@ void ScreenRecorder::Configure() {
                                 videoEncoderContext->width, videoEncoderContext->height, videoEncoderContext->pix_fmt,
                                 SWS_BICUBIC, NULL, NULL, NULL);
 
-    /* Configure filter crop */
+    /* Configure filter isCropped */
+    if(isCropped) {
 #ifdef __APPLE__
-    configureFilter(decoderContext, sourceContext, sinkContext, filterGraph, "crop=w=800:h=800:x=100:y=100");
+        configureFilters();
 #endif
+    }
+
     /* Clean avformat and pause it */
     av_read_pause(inputVideoFormatContext);
     avformat_flush(inputVideoFormatContext);
     av_read_pause(inputAudioFormatContext);
     avformat_flush(inputAudioFormatContext);
-
-
 }
-
-
-
 
 void ScreenRecorder::Capture() {
     AVPacket *inputPacket = av_packet_alloc();
@@ -321,7 +316,7 @@ void ScreenRecorder::Capture() {
             } else throw std::runtime_error("Error in receiving the decoded frame.");
         }
 #ifdef __APPLE__
-        if (crop && false) {
+        if (isCropped && false) {
             // Push the decoded frame into the filtergraph
             if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
                 throw std::runtime_error("Error in filtering.");
@@ -333,7 +328,7 @@ void ScreenRecorder::Capture() {
 
             //filteredFrame->pkt_dts = outputFrame->pkt_dts;
         }
-            // only if we need to crop the image
+            // only if we need to isCropped the image
         else {
             // Resize the inputFrame
             sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height,
@@ -366,8 +361,8 @@ void ScreenRecorder::Capture() {
 
         ul.lock();
     }
-    //wait for audio to end before closing the file
-    /*if(audio && audioRecorder.joinable())
+    //wait for isAudioRecorded to end before closing the file
+    /*if(isAudioRecorded && audioRecorder.joinable())
         audioRecorder.join();*/
 
 }
