@@ -100,6 +100,7 @@ void ScreenRecorder::CaptureAudio() {
     AVPacket *inputPacket = av_packet_alloc();
     AVPacket *outputPacket = av_packet_alloc();
     AVFrame *inputFrame = av_frame_alloc();
+    inputFrame->nb_samples = 1000;
     /*AVFrame *outputFrame = av_frame_alloc();
 
     outputFrame->nb_samples = audioEncoderContext->frame_size;
