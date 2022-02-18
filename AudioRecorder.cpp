@@ -2,6 +2,10 @@
 // Created by ferre on 19/12/2021.
 //
 #include "ScreenRecorder.h"
+#ifdef _WIN32
+    #include <dshow.h>
+#endif
+
 
 const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
 
@@ -13,7 +17,8 @@ void ScreenRecorder::configureAudioInput() {
     //av_dict_set(&options, "sample_rate",sr.c_str(), 0);
 #ifdef _WIN32
     inputFormat=av_find_input_format("dshow");
-    if(avformat_open_input(&inputAudioFormatContext,"audio=Microfono (4- HyperX Cloud Flight Wireless)",inputFormat, nullptr) != 0)
+
+    if(avformat_open_input(&inputAudioFormatContext,audioDevice.c_str(),inputFormat, nullptr) != 0)
         throw std::runtime_error("Error in opening audio input.");
 #elif defined linux
     inputFormat=av_find_input_format("x11grab");

@@ -57,6 +57,7 @@ extern "C" {
 
 #include "libswscale/swscale.h"
 #include "libswresample/swresample.h"
+#include "libavdevice/avdevice.h"
 
 }
 
@@ -123,6 +124,7 @@ private:
     std::pair<int, int> bottomLeft, topRight;
     std::string filename;
     int framerate;
+    std::string audioDevice;
 
     /*Thread Management*/
     std::thread recorder;
@@ -208,7 +210,11 @@ public:
     void setOutputFile(std::string filename) {
         this->filename = filename;
     };
-
+#if _WIN32
+    void setAudioDevice(std::string name){
+        audioDevice = "audio=" + name;
+    }
+#endif
     void setFrameRate(int framerate) {
 #ifdef _WIN32
         if(framerate > 15) this->framerate = 15;
