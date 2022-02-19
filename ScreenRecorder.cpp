@@ -26,16 +26,15 @@ void ScreenRecorder::configureVideoInput() {
     if(avformat_open_input(&inputVideoFormatContext, videoDevice.c_str(),inputFormat,&videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __linux__
-    if(isCropped){
-        std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
-        std::string offsetX = std::to_string(std::get<1>(bottomLeft));
-        std::string offsetY = std::to_string(std::get<0>(topRight));
-        av_dict_set(&videoOptions,"video_size", videoSize.c_str(), 0);
-        av_dict_set(&videoOptions, "grab_x", offsetX.c_str(), 0);
-        av_dict_set(&videoOptions, "grab_y", offsetY.c_str(), 0);
-    }
     inputFormat=av_find_input_format("x11grab");
-    if(avformat_open_input(&inputVideoFormatContext,(":" + videoDevice + ":.0+10,20"),inputFormat,nullptr) != 0)
+    int maxHeight, maxWidth;
+    ScreenSize::getScreenResolution(maxWidth, maxHeight);
+    int topDistance = maxHeight - topRight.second;
+    av_dict_set(&videoOptions, "video_size", (std::to_string(width) + "x" + std::to_string(height)).c_str(), 0);
+    if(avformat_open_input(&inputVideoFormatContext,
+                           (":" + videoDevice + ".0+" + std::to_string(bottomLeft.second) + "," + std::to_string(topDistance)).c_str(),
+                           inputFormat,
+                           &videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");
@@ -219,7 +218,7 @@ ScreenRecorder::ScreenRecorder() : filename("./output.mp4"), framerate(15), isAu
     videoDevice = "desktop";
     audioDevice = "";
 #endif
-#ifdef _linux
+#ifdef __linux__
     videoDevice = "1";
     audioDevice = "0";
 #endif
@@ -252,6 +251,8 @@ void ScreenRecorder::Configure() {
         this->height = std::get<0>(topRight) - std::get<0>(bottomLeft);
     } else {
         ScreenSize::getScreenResolution(width, height);
+        this->bottomLeft = std::make_pair(0, 0);
+        this->topRight = std::make_pair(width, height);
     }
 
     /* Create and configure input format */
