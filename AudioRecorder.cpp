@@ -21,8 +21,11 @@ void ScreenRecorder::configureAudioInput() {
     if(avformat_open_input(&inputAudioFormatContext,audioDevice.c_str(),inputFormat, nullptr) != 0)
         throw std::runtime_error("Error in opening audio input.");
 #elif defined linux
-    inputFormat=av_find_input_format("x11grab");
-    if(avformat_open_input(&inputAudioFormatContext,":0.0+10,20",inputFormat,nullptr) != 0)
+    inputFormat=av_find_input_format("alsa");
+    AVDictionary *audioOptions = nullptr;
+    av_dict_set(&audioOptions, "ac", "2", 0);
+    av_dict_set(&audioOptions, "i", "hw:0", 0);
+    if(avformat_open_input(&inputAudioFormatContext,"",inputFormat, &audioOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");

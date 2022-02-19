@@ -11,6 +11,8 @@
 
 #if _WIN32
 #include <windows.h>
+#elif __linux__
+#include <X11/Xlib.h>
 #elif __APPLE__
 #include "CoreGraphics/CoreGraphics.h"
 #endif
@@ -54,7 +56,11 @@ public:
             //std::cout << std::endl << w << 'x' << h;
         }
 #elif __linux__
-        //TODO LINUX
+        Display *d = XOpenDisplay(NULL);
+        Screen *s = DefaultScreenOfDisplay(d);
+
+        width = s->width;
+        height = s->height;
 #endif
     }
 };

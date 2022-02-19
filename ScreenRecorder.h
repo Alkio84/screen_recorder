@@ -204,13 +204,6 @@ public:
         this->isCropped = true;
     };
 
-    /* Set viewport with bottom left corner dimensions */
-    void setViewPort(std::pair<int, int> bottomLeft, int width, int height) {
-        this->bottomLeft = bottomLeft;
-        this->topRight = std::make_pair(bottomLeft.first + width, bottomLeft.second + height);
-        this->isCropped = true;
-    };
-
     void setOutputFile(std::string filename) {
         this->filename = filename;
     };
@@ -226,7 +219,6 @@ public:
     void setVideoDevice(std::string videoDevice) {
         this->videoDevice = videoDevice;
     }
-
 
     void setAudioDevice(std::string audioDevice) {
 #ifdef _WIN32
