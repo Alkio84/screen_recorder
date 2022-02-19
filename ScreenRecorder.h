@@ -215,12 +215,6 @@ public:
         this->filename = filename;
     };
 
-#if _WIN32
-    void setAudioDevice(std::string name){
-        audioDevice = "audio=" + name;
-    }
-#endif
-
     void setFrameRate(int framerate) {
 #ifdef _WIN32
         if(framerate > 15) this->framerate = 15;
@@ -235,7 +229,11 @@ public:
 
 
     void setAudioDevice(std::string audioDevice) {
+#ifdef _WIN32
+        this->audioDevice = "audio=" + audioDevice;
+#else
         this->audioDevice = audioDevice;
+#endif
     }
 };
 

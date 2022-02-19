@@ -12,18 +12,28 @@ void ScreenRecorder::configureVideoInput() {
     inputVideoFormatContext = avformat_alloc_context();
     inputVideoFormatContext->probesize = 5 * pow(10, 7);
 
-    /*std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
-    std::string offsetX = std::to_string(std::get<1>(bottomLeft));
-    std::string offsetY = std::to_string(std::get<0>(bottomLeft));
-    av_dict_set(&options,"video_size", videoSize.c_str(), 0);
-    av_dict_set(&options, "offset_x", offsetX.c_str(), 0);
-    av_dict_set(&options, "offset_y", offsetY.c_str(), 0);*/
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
+    if(isCropped){
+        std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
+        std::string offsetX = std::to_string(std::get<1>(bottomLeft));
+        std::string offsetY = std::to_string(std::get<0>(bottomLeft));
+        av_dict_set(&videoOptions,"video_size", videoSize.c_str(), 0);
+        av_dict_set(&videoOptions, "offset_x", offsetX.c_str(), 0);
+        av_dict_set(&videoOptions, "offset_y", offsetY.c_str(), 0);
+    }
     inputFormat = av_find_input_format("gdigrab");
     if(avformat_open_input(&inputVideoFormatContext, videoDevice.c_str(),inputFormat,&videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __linux__
+    if(isCropped){
+        std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
+        std::string offsetX = std::to_string(std::get<1>(bottomLeft));
+        std::string offsetY = std::to_string(std::get<0>(topRight));
+        av_dict_set(&videoOptions,"video_size", videoSize.c_str(), 0);
+        av_dict_set(&videoOptions, "grab_x", offsetX.c_str(), 0);
+        av_dict_set(&videoOptions, "grab_y", offsetY.c_str(), 0);
+    }
     inputFormat=av_find_input_format("x11grab");
     if(avformat_open_input(&inputVideoFormatContext,(":" + videoDevice + ":.0+10,20"),inputFormat,nullptr) != 0)
         throw std::runtime_error("Error in opening input.");
