@@ -21,15 +21,15 @@ void ScreenRecorder::configureVideoInput() {
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
     inputFormat = av_find_input_format("gdigrab");
-    if(avformat_open_input(&inputVideoFormatContext,"desktop",inputFormat,&videoOptions) != 0)
+    if(avformat_open_input(&inputVideoFormatContext, videoDevice.c_str(),inputFormat,&videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __linux__
     inputFormat=av_find_input_format("x11grab");
-    if(avformat_open_input(&inputVideoFormatContext,":0.0+10,20",inputFormat,nullptr) != 0)
+    if(avformat_open_input(&inputVideoFormatContext,(":" + videoDevice + ":.0+10,20"),inputFormat,nullptr) != 0)
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");
-    if(avformat_open_input(&inputVideoFormatContext, "1:", inputFormat, &videoOptions) != 0)
+    if(avformat_open_input(&inputVideoFormatContext, (videoDevice + ":").c_str(), inputFormat, &videoOptions) != 0)
         throw std::runtime_error("Error in opening input.");
 #endif
 
@@ -204,6 +204,19 @@ ScreenRecorder::ScreenRecorder() : filename("./output.mp4"), framerate(15), isAu
     sourceContext = nullptr;
     sinkContext = nullptr;
     filterGraph = nullptr;
+
+#ifdef _WIN32
+    videoDevice = "desktop";
+    audioDevice = "";
+#endif
+#ifdef _linux
+    videoDevice = "1";
+    audioDevice = "0";
+#endif
+#ifdef __APPLE__
+    videoDevice = "1";
+    audioDevice = "0";
+#endif
 }
 
 /* Uninitialize the resources */
@@ -307,8 +320,8 @@ void ScreenRecorder::Capture() {
                 continue;
             } else throw std::runtime_error("Error in decoding the packet.");
         }
-        // Get decoded inputFrame
 
+        // Get decoded inputFrame
         if ((ret = avcodec_receive_frame(videoDecoderContext, inputFrame)) < 0) {
             if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
                 ul.lock();
@@ -316,7 +329,7 @@ void ScreenRecorder::Capture() {
             } else throw std::runtime_error("Error in receiving the decoded frame.");
         }
 #ifdef __APPLE__
-        if (isCropped && false) {
+        if (isCropped) {
             // Push the decoded frame into the filtergraph
             if (av_buffersrc_add_frame_flags(sourceContext, inputFrame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
                 throw std::runtime_error("Error in filtering.");
@@ -324,12 +337,11 @@ void ScreenRecorder::Capture() {
             if (av_buffersink_get_frame(sinkContext, filteredFrame) < 0)
                 throw std::runtime_error("Error in filtering.");
 
-            //sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, decoderContext->height, outputFrame->data, outputFrame->linesize);
+            sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, videoDecoderContext->height, outputFrame->data,
+                      outputFrame->linesize);
 
-            //filteredFrame->pkt_dts = outputFrame->pkt_dts;
-        }
-            // only if we need to isCropped the image
-        else {
+            filteredFrame->pkt_dts = outputFrame->pkt_dts;
+        } else {
             // Resize the inputFrame
             sws_scale(swsContext, inputFrame->data, inputFrame->linesize, 0, inputFrame->height,
                       outputFrame->data, outputFrame->linesize);

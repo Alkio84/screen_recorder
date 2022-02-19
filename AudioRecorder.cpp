@@ -26,7 +26,7 @@ void ScreenRecorder::configureAudioInput() {
         throw std::runtime_error("Error in opening input.");
 #elif __APPLE__
     inputFormat = av_find_input_format("avfoundation");
-    if(avformat_open_input(&inputAudioFormatContext, ":0", inputFormat, nullptr) != 0)
+    if(avformat_open_input(&inputAudioFormatContext, (":" + audioDevice).c_str(), inputFormat, nullptr) != 0)
         throw std::runtime_error("Error in opening input.");
 #endif
 

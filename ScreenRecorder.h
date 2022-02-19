@@ -16,6 +16,7 @@
 #include <cstring>
 #include <math.h>
 #include <string.h>
+#include <vector>
 
 #include <map>
 #include <mutex>
@@ -90,10 +91,14 @@ private:
     SwsContext *swsContext;
     SwrContext *resampleContext;
 
-    /*Filter*/
+    /* Filter */
     AVFilterContext *sourceContext;
     AVFilterContext *sinkContext;
     AVFilterGraph *filterGraph;
+
+    /* Input Devices */
+    std::string videoDevice;
+    std::string audioDevice;
 
     /* Configure before starting the video */
     void Configure();
@@ -124,7 +129,6 @@ private:
     std::pair<int, int> bottomLeft, topRight;
     std::string filename;
     int framerate;
-    std::string audioDevice;
 
     /*Thread Management*/
     std::thread recorder;
@@ -210,11 +214,13 @@ public:
     void setOutputFile(std::string filename) {
         this->filename = filename;
     };
+
 #if _WIN32
     void setAudioDevice(std::string name){
         audioDevice = "audio=" + name;
     }
 #endif
+
     void setFrameRate(int framerate) {
 #ifdef _WIN32
         if(framerate > 15) this->framerate = 15;
@@ -222,6 +228,15 @@ public:
 #endif
             this->framerate = framerate;
     };
+
+    void setVideoDevice(std::string videoDevice) {
+        this->videoDevice = videoDevice;
+    }
+
+
+    void setAudioDevice(std::string audioDevice) {
+        this->audioDevice = audioDevice;
+    }
 };
 
 #endif

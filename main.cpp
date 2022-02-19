@@ -46,9 +46,18 @@ int main() {
     screenRecorder.setOutputFile("../Recordings/output.mp4");
     screenRecorder.recordAudio(true);
     screenRecorder.setViewPortFromCorners1(std::pair<int, int>(100,100), std::pair<int, int>(900,900));
+    screenRecorder.setFrameRate(25);
 
     std::cout<<"started"<<std::endl;
     screenRecorder.Start();
+    std::this_thread::sleep_for(3s);
+
+    std::cout<<"paused"<<std::endl;
+    screenRecorder.Pause();
+    std::this_thread::sleep_for(2s);
+
+    std::cout<<"resumed"<<std::endl;
+    screenRecorder.Resume();
     std::this_thread::sleep_for(3s);
 
     screenRecorder.Stop();
