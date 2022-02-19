@@ -16,8 +16,8 @@ void ScreenRecorder::configureVideoInput() {
 #ifdef _WIN32
     if(isCropped){
         std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
-        std::string offsetX = std::to_string(std::get<1>(bottomLeft));
-        std::string offsetY = std::to_string(std::get<0>(bottomLeft));
+        std::string offsetX = std::to_string(std::get<0>(bottomLeft));
+        std::string offsetY = std::to_string(std::get<1>(bottomLeft));
         av_dict_set(&videoOptions,"video_size", videoSize.c_str(), 0);
         av_dict_set(&videoOptions, "offset_x", offsetX.c_str(), 0);
         av_dict_set(&videoOptions, "offset_y", offsetY.c_str(), 0);
@@ -248,8 +248,8 @@ void ScreenRecorder::Configure() {
     avdevice_register_all();
 
     if (isCropped) {
-        this->width = std::get<1>(topRight) - std::get<1>(bottomLeft);
-        this->height = std::get<0>(topRight) - std::get<0>(bottomLeft);
+        this->width = std::get<0>(topRight) - std::get<0>(bottomLeft);
+        this->height = std::get<1>(topRight) - std::get<1>(bottomLeft);
     } else {
         ScreenSize::getScreenResolution(width, height);
     }
