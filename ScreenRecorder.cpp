@@ -11,13 +11,14 @@
 void ScreenRecorder::configureVideoInput() {
     inputVideoFormatContext = avformat_alloc_context();
     inputVideoFormatContext->probesize = 5 * pow(10, 7);
-
+    av_dict_set(&videoOptions, "r", std::to_string(framerate).c_str(), 0);
     AVInputFormat *inputFormat = nullptr;
 #ifdef _WIN32
     if(isCropped){
         std::string videoSize = std::to_string(width) + "x" + std::to_string(height);
         std::string offsetX = std::to_string(std::get<0>(bottomLeft));
         std::string offsetY = std::to_string(std::get<1>(bottomLeft));
+        av_dict_set(&videoOptions, "framerate", std::to_string(framerate).c_str(), 0);
         av_dict_set(&videoOptions,"video_size", videoSize.c_str(), 0);
         av_dict_set(&videoOptions, "offset_x", offsetX.c_str(), 0);
         av_dict_set(&videoOptions, "offset_y", offsetY.c_str(), 0);
@@ -43,7 +44,7 @@ void ScreenRecorder::configureVideoInput() {
 #endif
 
     /* Applying frame rate */
-    av_dict_set(&videoOptions, "r", std::to_string(framerate).c_str(), 0);
+
     if (avformat_find_stream_info(inputVideoFormatContext, nullptr) < 0)
         throw std::runtime_error("Unable to find the stream information.");
 }
