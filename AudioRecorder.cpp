@@ -109,13 +109,6 @@ void ScreenRecorder::CaptureAudio() {
     AVPacket *outputPacket = av_packet_alloc();
     AVFrame *inputFrame = av_frame_alloc();
     inputFrame->nb_samples = 1000;
-    /*AVFrame *outputFrame = av_frame_alloc();
-
-    outputFrame->nb_samples = audioEncoderContext->frame_size;
-    outputFrame->channel_layout = audioEncoderContext->channel_layout;
-    outputFrame->format = audioEncoderContext->sample_fmt;
-    outputFrame->sample_rate = audioEncoderContext->sample_rate;
-    av_frame_get_buffer(outputFrame, 0);*/
 
     //resampler
     int64_t pts = 0;
@@ -151,9 +144,6 @@ void ScreenRecorder::CaptureAudio() {
     std::unique_lock ul(m);
     int ret;
     while (!end) {
-        // Mutual Exclusion, lock done at the end of the cycle
-        //cv.wait(ul, [this]() { return this->capture; });
-
         ul.unlock();
 
         // Get packet
@@ -163,7 +153,6 @@ void ScreenRecorder::CaptureAudio() {
                 continue;
             } else throw std::runtime_error("Error in reading packet from input context.");
         }
-        //av_packet_rescale_ts(outputPacket, inputAudioFormatContext->streams[inAudioStreamIndex]->time_base, audioDecoderContext->time_base);
         // Decode packet
         if ((ret = avcodec_send_packet(audioDecoderContext, inputPacket)) < 0) {
             if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF)) {
@@ -180,29 +169,6 @@ void ScreenRecorder::CaptureAudio() {
                 continue;
             } else throw std::runtime_error("Error in receiving the decoded frame.");
         }
-        /*if (outputFormatContext->streams[outAudioStreamIndex]->start_time <= 0) {
-            outputFormatContext->streams[outAudioStreamIndex]->start_time = inputFrame->pts;
-        }
-        //init converted samples
-        uint8_t **resampledData = nullptr;
-        ret = av_samples_alloc_array_and_samples(&resampledData, NULL, audioEncoderContext->channels, inputFrame->nb_samples, requireAudioFmt, 0);
-        if (ret < 0) {
-            throw std::runtime_error("Fail to alloc samples by av_samples_alloc_array_and_samples.");
-        }
-        //convert samples
-        swr_convert(resampleContext,
-                    resampledData, inputFrame->nb_samples,
-                    (const uint8_t**)inputFrame->extended_data, inputFrame->nb_samples);
-        int x = av_audio_fifo_size(fifo);
-        add_samples_to_fifo(fifo, resampledData, inputFrame->nb_samples);
-        x = av_audio_fifo_size(fifo);
-
-        outputFrame->nb_samples = audioEncoderContext->frame_size;
-        outputFrame->channel_layout = audioEncoderContext->channel_layout;
-        outputFrame->format = audioEncoderContext->sample_fmt;
-        outputFrame->sample_rate = audioEncoderContext->sample_rate;
-        av_frame_get_buffer(outputFrame, 0);
-        */
         uint8_t **cSamples = nullptr;
         ret = av_samples_alloc_array_and_samples(&cSamples, NULL, audioEncoderContext->channels, inputFrame->nb_samples, requireAudioFmt, 0);
         if (ret < 0) {
@@ -285,6 +251,10 @@ void ScreenRecorder::CaptureAudio() {
 
         ul.lock();
     }
-
+    av_packet_free(&inputPacket);
+    av_packet_free(&outputPacket);
+    av_frame_free(&inputFrame);
+    av_audio_fifo_free(fifo);
+    swr_free(&resampleContext);
 }
 

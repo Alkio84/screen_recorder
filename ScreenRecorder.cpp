@@ -241,6 +241,22 @@ ScreenRecorder::~ScreenRecorder() { //DA RIVEDERE COMPLETAMENTE
     avformat_free_context(inputFormatContext);
     if (!inputFormatContext) std::cout << "\navformat free successfully";
     else std::cout << "\nunable to free avformat context";*/
+    sws_freeContext(swsContext);
+    avformat_free_context(inputVideoFormatContext);
+    //avformat_free_context(outputFormatContext);
+
+    avcodec_free_context(&videoDecoderContext);
+    avcodec_free_context(&videoEncoderContext);
+
+    if(isAudioRecorded){
+        avformat_free_context(inputAudioFormatContext);
+
+        avcodec_free_context(&audioDecoderContext);
+        avcodec_free_context(&audioEncoderContext);
+
+
+    }
+    //streams are freed with avformat
 }
 
 void ScreenRecorder::Configure() {
@@ -398,9 +414,9 @@ void ScreenRecorder::Capture() {
 
         ul.lock();
     }
-    //wait for isAudioRecorded to end before closing the file
-    /*if(isAudioRecorded && audioRecorder.joinable())
-        audioRecorder.join();*/
-
+    av_packet_free(&inputPacket);
+    av_packet_free(&outputPacket);
+    av_frame_free(&inputFrame);
+    av_frame_free(&outputFrame);
 }
 
