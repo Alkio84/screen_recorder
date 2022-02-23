@@ -155,13 +155,13 @@ public:
     void Pause() {
         std::unique_lock ul(m);
         av_read_pause(inputVideoFormatContext);
-        av_read_pause(inputAudioFormatContext);
+        if(isAudioRecorded) av_read_pause(inputAudioFormatContext);
         capture = false;
     }
 
     void Resume() {
         av_read_play(inputVideoFormatContext);
-        av_read_play(inputAudioFormatContext);
+        if(isAudioRecorded) av_read_play(inputAudioFormatContext);
         std::unique_lock ul(m);
         capture = true;
         cv.notify_all();

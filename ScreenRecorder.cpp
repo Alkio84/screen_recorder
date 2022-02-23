@@ -185,7 +185,7 @@ Mark the encoder so that it behaves accordingly. */
         throw std::runtime_error("Error in writing video header.");
 
     outVideoStreamIndex = outputFormatContext->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO ? 0 : 1;
-    outAudioStreamIndex = outputFormatContext->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ? 0 : 1;
+    if(isAudioRecorded) outAudioStreamIndex = outputFormatContext->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ? 0 : 1;
 }
 
 /* Initialize the resources*/
@@ -258,20 +258,30 @@ void ScreenRecorder::Configure() {
 
     /* Create and configure input format */
     ScreenRecorder::configureVideoInput();
-    ScreenRecorder::configureAudioInput();
-    /* Create and configure video and isAudioRecorded decoder */
+    /* Create and configure video decoder */
     ScreenRecorder::configureVideoDecoder();
-    ScreenRecorder::configureAudioDecoder();
     /* Create and configure output format */
     ScreenRecorder::inizializeOutput();
     /* Create and configure video stream */
     ScreenRecorder::configureOutVideoStream();
-    ScreenRecorder::configureOutAudioStream();
     /* Create and configure encoder */
     ScreenRecorder::configureVideoEncoder();
-    ScreenRecorder::configureAudioEncoder();
+
+    if(isAudioRecorded) {
+        /* Create and configure input format */
+        ScreenRecorder::configureAudioInput();
+        /* Create and configure audio decoder */
+        ScreenRecorder::configureAudioDecoder();
+        /* Create and configure output format */
+        ScreenRecorder::configureOutAudioStream();
+        /* Create and configure encoder */
+        ScreenRecorder::configureAudioEncoder();
+    }
+
     /* Configure output setting and write file header */
     ScreenRecorder::configureOutput();
+
+
 
     swsContext = sws_getContext(videoDecoderContext->width, videoDecoderContext->height, videoDecoderContext->pix_fmt,
                                 videoEncoderContext->width, videoEncoderContext->height, videoEncoderContext->pix_fmt,
@@ -287,8 +297,11 @@ void ScreenRecorder::Configure() {
     /* Clean avformat and pause it */
     av_read_pause(inputVideoFormatContext);
     avformat_flush(inputVideoFormatContext);
-    av_read_pause(inputAudioFormatContext);
-    avformat_flush(inputAudioFormatContext);
+    if(isAudioRecorded){
+        av_read_pause(inputAudioFormatContext);
+        avformat_flush(inputAudioFormatContext);
+    }
+
 }
 
 void ScreenRecorder::Capture() {
